@@ -432,11 +432,11 @@ function data = getTetDataRT(T,X,lite,force)
     
     assert(all(data.edges(:,1)<=data.edges(:,2)));
     
+    % compute incidence matrix
+    data.primalIncidenceMatrix = sparse([1:data.numEdges 1:data.numEdges]', [data.edges(:,1);data.edges(:,2)], [ones(data.numEdges,1) -ones(data.numEdges,1)]    ,data.numEdges,data.numVertices);
+    
     % compute primal vert/edge laplacian
-    data.VV2E = sparse(data.edges(:,1), data.edges(:,2), ones(data.numEdges,1), data.numVertices, data.numVertices);
-    data.VV2E = data.VV2E + data.VV2E';
-    data.vertDegrees = sum(data.VV2E)/2;
-    data.primalOneLaplacian = data.VV2E - diag(data.vertDegrees);
+    data.primalOneLaplacian = data.primalIncidenceMatrix'*data.primalIncidenceMatrix;
     
     
     

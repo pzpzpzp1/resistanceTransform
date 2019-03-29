@@ -16,20 +16,25 @@ if exist(['meshes/vtkTetMeshes/' fnamec '.vtk'])~=2
         [ret, name] = system('hostname');
         if contains(name,'DESKTOP-UH1G0VB')
             gmshbase = 'D:/Documents/gmsh-4.2.2-Windows64/gmsh.exe';
+        elseif contains(name,'DESKTOP-5UNMMEJ')
+            gmshbase = 'C:\Users\pzpzp\Documents\gmsh-4.2.2-Windows64\gmsh.exe';
         else
             error('new computer?');
         end
     else
         error('new computer?');
     end
-
+    system(sprintf('%s %s.msh -save -o %s.vtk',gmshbase,['../../10k_tetmesh/' fname],['meshes/vtkTetMeshes/' fname]));
+            
+    
     fid = fopen(['meshes/vtkTetMeshes/' fname '.vtk']);
     [Verts,Tets] = loadVTKTET(fid);
     fclose(fid);
 
     %% build bounding box
+    margin = 1.3;
     means = (max(Verts)+min(Verts))/2;
-    BB = [means-(means-min(Verts))*1.1; (max(Verts)-means)*1.1+means];
+    BB = [means-(means-min(Verts))*margin; (max(Verts)-means)*margin+means];
     assert(all(BB(1,:)<min(Verts) & BB(2,:)>max(Verts)));
 
     %% create complement surface mesh
@@ -61,7 +66,7 @@ if exist(['meshes/vtkTetMeshes/' fnamec '.vtk'])~=2
     writeOff(surfaceFname, newSurfaceX, newSurfaceTriangles);
 
     % call tetwild
-    system(sprintf('TetWild.exe %s -q --is-quiet --output %s',surfaceFname,gmshTetMesh));
+    system(sprintf('TetWild.exe %s -q --is-quiet --output %s.msh',surfaceFname,gmshTetMesh));
 
     % gmsh
     system(sprintf('%s %s.msh -save -o %s.vtk',gmshbase, [gmshTetMesh '.msh'],['meshes/vtkTetMeshes/' fnamec]));
