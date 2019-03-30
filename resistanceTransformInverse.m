@@ -3,14 +3,22 @@
 resistivity = 1;
 I = 1;
 debugging = 1;
+premade = 1;
 
 %% load tet mesh
-files = dir('../../10k_tetmesh');
-filename = files(randi(numel(files)-2)+2).name;
-[ext,fname,ext] = fileparts(filename);
-fnamec = [fname '_c'];
+if premade
+    files = dir('meshes/vtkComplementTetMeshes');
+    filename = files(randi(numel(files)-2)+2).name;
+    [ext,fname,ext] = fileparts(filename);
+    fnamec = [fname '_c'];
+else
+    files = dir('../../10k_tetmesh/');
+    filename = files(randi(numel(files)-2)+2).name;
+    [ext,fname,ext] = fileparts(filename);
+    fnamec = [fname '_c'];
 
-generateComplementMesh(fname);
+    generateComplementMesh(fname);
+end
 
 %% LOAD COMPLEMENT TET MESH
 fid = fopen(['meshes/vtkTetMeshes/' fnamec '.vtk']);
