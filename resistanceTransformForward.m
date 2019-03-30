@@ -109,23 +109,34 @@ end
 currentInjection = zeros(Ctetdata.numVertices,1);
 currentInjection(randomSource)=I;
 currentInjection(randomSink)=-I;
-phi = [0; (TetL(2:end,2:end) \ currentInjection(2:end))*resistivity]; % base voltage 0 at first vertex.
+inds = 1:numel(currentInjection); inds(randomSink)=[];
+phi = [(TetL(inds,inds) \ currentInjection(inds))*resistivity]; % base voltage 0 at first vertex.
+phi(randomSink:(end+1)) = [0; phi(randomSink:end)];
+
+if debugging
+    colors = phi;
+    colors = colors-min(colors);
+    colors = colors/max(colors);
+    colors = [colors colors colors];
+    figure; hold all; axis equal; rotate3d on;
+    scatter3(Ctetdata.vertices(:,1),Ctetdata.vertices(:,2),Ctetdata.vertices(:,3),100,colors,'filled');
+end
 
 % compute current based on voltages. GRAD(V)/R = I
-bulkGradMat = [ones(4*Ctetdata.numTetrahedra,1) reshape([Ctetdata.vertices(Ctetdata.tetrahedra(:,1),:) Ctetdata.vertices(Ctetdata.tetrahedra(:,2),:) Ctetdata.vertices(Ctetdata.tetrahedra(:,3),:) Ctetdata.vertices(Ctetdata.tetrahedra(:,4),:)]',3,[])'];
+bulkGradList = [ones(4*Ctetdata.numTetrahedra,1) reshape([Ctetdata.vertices(Ctetdata.tetrahedra(:,1),:) Ctetdata.vertices(Ctetdata.tetrahedra(:,2),:) Ctetdata.vertices(Ctetdata.tetrahedra(:,3),:) Ctetdata.vertices(Ctetdata.tetrahedra(:,4),:)]',3,[])'];
 II = repmat([1:4*Ctetdata.numTetrahedra]',4,1);
 Jt = reshape(repmat((0:(Ctetdata.numTetrahedra-1))*4,4,1),1,[]);
 JJ = [Jt+1 Jt+2 Jt+3 Jt+4];
-KK = bulkGradMat(:);
+KK = bulkGradList(:);
 bulkGradMat = sparse(II,JJ,KK,4*Ctetdata.numTetrahedra,4*Ctetdata.numTetrahedra);
-bulkVoltages = reshape(phi(Ctetdata.tetrahedra),[],1);
+bulkVoltages = reshape(phi(Ctetdata.tetrahedra)',[],1);
 bulkAffineGrads = reshape(bulkGradMat\bulkVoltages,4,[])';
 bulkLinearGrads = bulkAffineGrads(:,2:4);
 
 if debugging
     scl = 10000;
     base = Ctetdata.tetBarycenters;
-    head = 2*bulkLinearGrads*scl;
+    head = bulkLinearGrads./norms(bulkLinearGrads,2,2);
     figure; hold all; axis equal; rotate3d on;
     quiver3(base(:,1),base(:,2),base(:,3),head(:,1),head(:,2),head(:,3))
     scatter3(Ctetdata.vertices(randomSource,1),Ctetdata.vertices(randomSource,2),Ctetdata.vertices(randomSource,3),500,'g.');
