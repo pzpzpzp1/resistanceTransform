@@ -1,4 +1,6 @@
 function generateComplementMesh(fname)
+    debugging = 0;
+
     fnamec = [fname '_c'];
     if exist(['meshes/vtkTetMeshes/' fnamec '.vtk'])~=2
         if ispc
@@ -59,8 +61,8 @@ function generateComplementMesh(fname)
 
         % call tetwild
         len = norm(BB(2,:)-BB(1,:))*.05; % default of tetwild
-        len = min(BB(2,:)-BB(1,:))/30;
-        system(sprintf('TetWild.exe %s -q --is-quiet --output %s.msh -l %f',surfaceFname,gmshTetMesh),len);
+        len = min(BB(2,:)-BB(1,:))/20;
+        system(sprintf('TetWild.exe %s -q --is-quiet --output %s.msh -l %f',surfaceFname,gmshTetMesh,len));
         delete meshes/gmshTetMeshes/*_sf.obj;
         
         % gmsh

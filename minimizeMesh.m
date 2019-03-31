@@ -1,5 +1,7 @@
 % Given a removes unreferenced vertices of X and re-indexes T accordingly. 
-function [Xo,To]=minimizeMesh(X,T)
+% ut is the index to transfer a scalar field from X to a scalar field on
+% Xo: phi_o = phi(ut);
+function [Xo,To,ut]=minimizeMesh(X,T)
     
     nV = size(X,1);
     nT = size(T,1);
