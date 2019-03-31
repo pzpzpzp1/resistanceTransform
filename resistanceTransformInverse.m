@@ -89,7 +89,16 @@ nBv = numel(BoundaryVertices);
 II = repmat(BoundaryVertices,nBv,1);
 JJ = repmat(BoundaryVertices',nBv,1); JJ = JJ(:);
 boundaryVertPairs = [II JJ];
+boundaryVertPairs = boundaryVertPairs(boundaryVertPairs(:,1)~=boundaryVertPairs(:,2),:);
 nBvPairs = size(boundaryVertPairs,1);
+
+rect.cells = rectCells;
+rect.verts = rectVerts;
+rect.vertDegree = vertDegree;
+rect.edges = rectEdges;
+rect.incidenceMatrix = rectIncidenceMatrix;
+rect.gradient = gradientOp;
+rect.edgeLengths = edgelengths;
 
 %% In silico data collection: 
 % some measurements can fail if pointlocation floating precision isn't good.
@@ -119,7 +128,35 @@ end
 nSuccess = nMeasurements-numel(exceptions);
 
 %% Solve for conductances using measured data!
+% clean measuredData
+currentInjections = zeros(size(rect.verts,1),nSuccess);
+measuredBoundaryVoltages = zeros(size(BoundaryVertices,1),nSuccess);
+measuredSTInds = zeros(nSuccess,2);
+counter = 1;
+for i = find(successfulMeasurements==1)'
+    measuredBoundaryVoltages(:,counter) = Results{i}.measuredVoltages;
+    measuredSTInds(counter,1) = Results{i}.sPosInd;
+    measuredSTInds(counter,2) = Results{i}.tPosInd;
+    currentInjections(Results{i}.sPosInd,i)=I;
+    currentInjections(Results{i}.tPosInd,i)=-I;
+    counter = counter + 1;
+end
 
+% initialize variables
+v0 = zeros(Ctetdata.numVertices,nSuccess);
+conductances0 = ones(size(rect.verts,1),1);
+
+% quantity to minimize
+measuredVoltages = v0*nan;
+measuredVoltages(BoundaryVertices,:)=measuredBoundaryVoltages;
+measureInds = find(~isnan(measuredVoltages));
+flattenedVoltages = measuredVoltages(measureInds);
+% v0(measureInds) == flattenedVoltages;
+
+% constraints
+% for i = 1:nSuccess
+%     rect.gradient' * spdiag(conductances0) * rect.gradient * v0(:,i) == currentInjections(:,i);
+% end
 
 
 

@@ -55,5 +55,5 @@ function measuredVoltages = measureVoltages(data, tetra, Laplacian, sourcePos, s
     phi = phi - min(phi);
     
     % interpolate voltages linearly to sample at measured locations
-    measuredVoltages = SampleScalarFieldFromTetMesh(data, tetra, phi, measureLocations, 1);
+    measuredVoltages = SampleScalarFieldFromTetMesh(data, tetra, phi, measureLocations, 0);
 end
