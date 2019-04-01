@@ -1,4 +1,5 @@
 addpath('point2trimesh');
+clear all; close all;
 
 %% declare misc parameters
 resistivity = 1;
@@ -6,7 +7,7 @@ I = 1;
 debugging = 1;
 premade = 1;
 resolution = 20; % 30 per edge
-nMeasurements = 500;
+nMeasurements = 1;
 subdivide = false;
 
 %% load tet mesh
@@ -140,6 +141,22 @@ for i = find(successfulMeasurements==1)'
     currentInjections(Results{i}.sPosInd,i)=I;
     currentInjections(Results{i}.tPosInd,i)=-I;
     counter = counter + 1;
+end
+
+if debugging
+    rvs = rectVerts(BoundaryVertices,:);
+    % visualize
+    for i = 1:nSuccess
+        colors = Results{i}.measuredVoltages; colors = colors - min(colors); colors = colors/max(colors);
+        removeInds = find(isnan(colors)); colors(removeInds)=[]; rvs(removeInds,:)=[];
+        sv = rect.verts(measuredSTInds(i,1),:);
+        tv = rect.verts(measuredSTInds(i,2),:);
+        figure; hold all; axis equal; rotate3d on;
+        scatter3(sv(:,1),sv(:,2),sv(:,3),300,'g','filled');
+        scatter3(tv(:,1),tv(:,2),tv(:,3),300,'r','filled');
+        scatter3(rvs(:,1),rvs(:,2),rvs(:,3),200,[colors colors colors],'.');
+        
+    end
 end
 
 % initialize variables
