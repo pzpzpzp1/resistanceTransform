@@ -94,10 +94,13 @@ nBvPairs = size(boundaryVertPairs,1);
 assert(nMeasurements <= nBvPairs); % can't take more samples than exist with a certain discretization
 measurements = randsample(nBvPairs,nMeasurements,false);
 
+injectedCurrentMat = sparse(HMesh.nverts,nMeasurements);
+solutionVoltagesMat = nan(HMesh.nverts,nMeasurements);
 Results = cell(nMeasurements,1);
 inds = 2:numel(currentVector); % remove one variable to make laplacian full rank
 L=chol(electricHollowLaplacian(inds,inds)); % chol factor to speed up solve. ~2x speedup per solve, for which there are many!
 for measurementInd = 1:numel(measurements)
+    fprintf('Made measurement %d out of %d\n', measurementInd, nMeasurements);
     measurement = measurements(measurementInd);
     sourcePos = boundaryVertPairs(measurement,1);
     sinkPos = boundaryVertPairs(measurement,2);
@@ -132,6 +135,10 @@ for measurementInd = 1:numel(measurements)
     Results{measurementInd}.sPosInd = ridx(find(sinkPos==find(HollowHMesh.isBoundingBoxVerts)));
     Results{measurementInd}.tPosInd = ridx(find(sourcePos==find(HollowHMesh.isBoundingBoxVerts)));
     Results{measurementInd}.measuredVoltages = measuredVoltages; 
+    solutionVoltagesMat(ridx,measurementInd) = solutionVoltages(HollowHMesh.isBoundingBoxVerts);
+    stind = [Results{measurementInd}.sPosInd Results{measurementInd}.tPosInd];
+    injectedCurrentMat(stind,measurementInd) = [-I,I];
+    Results{measurementInd}.injectedCurrent = injectedCurrentMat(:,measurementInd);
     
     if debugging
         stinds = [Results{measurementInd}.sPosInd Results{measurementInd}.tPosInd];
@@ -144,10 +151,41 @@ for measurementInd = 1:numel(measurements)
 end
 
 %% Solve for conductances using measured data!
+% ground truth conductances
+[ids, dists] = knnsearch(HollowHMesh.edgeCenters, HMesh.edgeCenters, 'K', 1);
+conductances = (dists<1e-12)/resistivity;
+conductancesGT = conductances; % ground truth conductance values on the full box. % one problem is that this makes the laplacian super degenerate.
+electricLaplacianGT = HMesh.gradientOp'*diag(sparse(conductances))*HMesh.gradientOp;
 
 % initialize variables
-v0 = zeros(Ctetdata.numVertices,nSuccess);
-conductances0 = ones(size(rect.verts,1),1);
+v0 = zeros(HMesh.nverts,nMeasurements);
+conductances0 = conductancesGT*0+1;
+
+converged = false;
+while ~converged
+    %% solve for v0 holding constant conductances
+    % minimize voltage difference from empirical
+    % subject to current injection constraints
+    cvx_begin
+        cvx_solver mosek
+        
+    cvx_end
+    
+    
+    
+    
+    %% solve for conductances, holding voltages
+    % minimize total variation of conductance
+    % subject to current injection constraints
+    % subject to volume constraint
+    cvx_begin
+        cvx_solver mosek
+        
+    cvx_end
+    
+    
+    
+end
 
 % quantity to minimize
 measuredVoltages = v0*nan;
