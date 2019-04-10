@@ -81,8 +81,6 @@ HollowHMesh.isBoundingBoxVerts = HMesh.isBoundaryVerts(idx);
 electricHollowLaplacian = HollowHMesh.gradientOp'*HollowHMesh.gradientOp;
 [ridx, dists] = knnsearch(HMesh.V2P, HollowHMesh.V2P(HollowHMesh.isBoundingBoxVerts,:), 'K', 1);
 assert(norm(dists)==0);
-[ridx, dists] = knnsearch(HMesh.V2P, boundaryVertPairs(measurements,:), 'K', 1);
-assert(norm(dists)==0);
 
 BoundaryVertices = find(HollowHMesh.isBoundingBoxVerts);
 nBv = numel(BoundaryVertices);
@@ -97,7 +95,7 @@ measurements = randsample(nBvPairs,nMeasurements,false);
 injectedCurrentMat = sparse(HMesh.nverts,nMeasurements);
 solutionVoltagesMat = nan(HMesh.nverts,nMeasurements);
 Results = cell(nMeasurements,1);
-inds = 2:numel(currentVector); % remove one variable to make laplacian full rank
+inds = 2:HollowHMesh.nverts; % remove one variable to make laplacian full rank
 L=chol(electricHollowLaplacian(inds,inds)); % chol factor to speed up solve. ~2x speedup per solve, for which there are many!
 for measurementInd = 1:numel(measurements)
     fprintf('Made measurement %d out of %d\n', measurementInd, nMeasurements);
@@ -115,7 +113,7 @@ for measurementInd = 1:numel(measurements)
     solutionVoltages = [0; L\(L'\currentVector(inds))];
     solutionVoltages = solutionVoltages-min(solutionVoltages); 
     
-    if debugging
+    if debugging && false
         sourceP = HollowHMesh.V2P(sourcePos,:);
         sinkP = HollowHMesh.V2P(sinkPos,:);
         rvs = HollowHMesh.V2P; colors = solutionVoltages/max(solutionVoltages);
@@ -140,13 +138,13 @@ for measurementInd = 1:numel(measurements)
     injectedCurrentMat(stind,measurementInd) = [-I,I];
     Results{measurementInd}.injectedCurrent = injectedCurrentMat(:,measurementInd);
     
-    if debugging
+    if debugging && false
         stinds = [Results{measurementInd}.sPosInd Results{measurementInd}.tPosInd];
         figure; hold all; rotate3d on; xlabel('voltages');
         Xs = HMesh.V2P(ridx,:);
         colors = measuredVoltages(ridx); colors = colors-min(colors); colors = colors/max(colors);
         scatter3(Xs(:,1),Xs(:,2),Xs(:,3),200,[colors colors colors],'.');
-        scatter3(HMesh.V2P(stinds,1),HMesh.V2P(stinds,2),HMesh.V2P(stinds,3),200,[1 0 0; 0 1 0],'filled');
+        scatter3(HMesh.V2P(stinds,1),HMesh.V2P(stinds,2),HMesh.V2P(stinds,3),200,[0 1 0; 1 0 0],'filled');
     end
 end
 
@@ -156,6 +154,8 @@ end
 conductances = (dists<1e-12)/resistivity;
 conductancesGT = conductances; % ground truth conductance values on the full box. % one problem is that this makes the laplacian super degenerate.
 electricLaplacianGT = HMesh.gradientOp'*diag(sparse(conductances))*HMesh.gradientOp;
+bulkMeasuredVoltageIndices = find(~isnan(solutionVoltagesMat));
+
 
 % initialize variables
 v0 = zeros(HMesh.nverts,nMeasurements);
