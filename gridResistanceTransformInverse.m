@@ -6,21 +6,21 @@ clear all; close all;
 resistivity = 1;
 I = 1;
 debugging = 1;
-resolution = 30; % per edge
-nMeasurements = 500;
+resolution = 10; % per edge
+nMeasurements = 1000;
+samplesizePerIter = 5;
 subdivide = false;
 
 %% load random surface mesh
 files = dir('../../10k_surface/');
 rnum = randi(numel(files)-2)+2;
-rnum=4990;
 filename = files(rnum).name;
 [~,fname,ext] = fileparts(filename);
 
 [V,F]=readOBJ(['../../10k_surface/' filename]);
 
 %% build bounding box
-margin = 1.1;
+margin = 1.2;
 means = (max(V)+min(V))/2;
 BB = [means-(means-min(V))*margin; (max(V)-means)*margin+means];
 assert(all(BB(1,:)<min(V) & BB(2,:)>max(V)));
@@ -158,49 +158,83 @@ end
 conductances = (dists<1e-12)/resistivity;
 conductancesGT = conductances; % ground truth conductance values on the full box. % one problem is that this makes the laplacian super degenerate.
 electricLaplacianGT = HMesh.gradientOp'*diag(sparse(conductances))*HMesh.gradientOp;
-bulkMeasuredVoltageIndices = find(~isnan(solutionVoltagesMat));
 
 % initialize variables
 v0 = zeros(HMesh.nverts,nMeasurements);
 conductances0 = conductancesGT*0+1;
+conductances0 = conductances0/sum(conductances0)*sum(conductancesGT);
+vol0 = sum(conductancesGT); % fixed volume
 
+%% verify that ground truth conductances admits 0 energy solution
+%{
+    cvx_begin
+        cvx_solver mosek
+        variable v(HMesh.nverts,nMeasurements);
+        
+        % compute physical feasibility energy
+        physFeas = norm(HMesh.gradientOp'*diag(sparse(conductancesGT))*HMesh.gradientOp ...
+                *v-injectedCurrentFull);
+        
+        % compute proximity to measured values
+        prox2Empirical = norm(v(bulkMeasuredVoltageIndices)-solutionVoltagesMat(bulkMeasuredVoltageIndices));
+        minimize prox2Empirical + alpha*physFeas;
+    cvx_end
+%}
+
+%% minimize biconvex energy by alternating
+figure; hold all; rotate3d on; xlabel('GT conductance');
+ptc2 = patch('Faces',HollowHMesh.F2V(HollowHMesh.isBoundaryFace,:),'Vertices',HollowHMesh.V2P,'FaceColor','green','EdgeColor','none'); alpha(ptc2,.1)
+xlim(BB(:,1)'+[1 -1]*1e-1);ylim(BB(:,2)'+[1 -1]*1e-1);zlim(BB(:,3)'+[1 -1]*1e-1);
+scatter3(HMesh.edgeCenters(:,1),HMesh.edgeCenters(:,2),HMesh.edgeCenters(:,3),5,conductancesGT);
 converged = false;
+alphac = 1;
+f1 = figure; hold all; rotate3d on; sctr = scatter3([],[],[]); xlabel('Iterated Conductances');
+ptc2 = patch('Faces',HollowHMesh.F2V(HollowHMesh.isBoundaryFace,:),'Vertices',HollowHMesh.V2P,'FaceColor','green','EdgeColor','none'); alpha(ptc2,.1)
+xlim(BB(:,1)'+[1 -1]*1e-1);ylim(BB(:,2)'+[1 -1]*1e-1);zlim(BB(:,3)'+[1 -1]*1e-1);
 while ~converged
-    %% solve for v0 holding constant conductances
-    % minimize voltage difference from empirical
-    % subject to current injection constraints
+    selectedMeasurements = randsample(nMeasurements,samplesizePerIter,false);
+    
+    % fix conductances, minimize relative to voltages
     cvx_begin
         cvx_solver mosek
+        variable v(HMesh.nverts,samplesizePerIter);
         
+        % compute physical feasibility energy
+        physFeas = norm(HMesh.gradientOp'*diag(sparse(conductances0))*HMesh.gradientOp ...
+                *v - injectedCurrentFull(:,selectedMeasurements));
+        
+        % compute proximity to measured values
+        prox2Empirical = norm(v(HMesh.isBoundaryVerts,:) - solutionVoltagesMat(HMesh.isBoundaryVerts, selectedMeasurements));
+        minimize prox2Empirical + alphac*physFeas;
     cvx_end
     
-    
-    
-    
-    %% solve for conductances, holding voltages
-    % minimize total variation of conductance
-    % subject to current injection constraints
-    % subject to volume constraint
+    % fix voltages, minimize relative to conductances
     cvx_begin
         cvx_solver mosek
+        variable conductances0(HMesh.nedges,1);
         
+        % regularize conductance?
+        
+        
+        % compute physical feasibility energy
+        physFeas = norm(HMesh.gradientOp'*diag(sparse(conductances0))*HMesh.gradientOp ...
+                *v - injectedCurrentFull(:,selectedMeasurements));
+            
+        minimize physFeas;
+        subject to
+            conductances0 <= 1;
+            conductances0 >= 0;
+            sum(conductances0) == vol0;
+            conductances0(HMesh.isBoundaryEdge)==ones(sum(HMesh.isBoundaryEdge),1)
     cvx_end
     
-    
+    if debugging
+        figure(f1); 
+        delete(sctr);
+        sctr = scatter3(HMesh.edgeCenters(:,1),HMesh.edgeCenters(:,2),HMesh.edgeCenters(:,3),5,conductances0);
+    end
     
 end
-
-% quantity to minimize
-measuredVoltages = v0*nan;
-measuredVoltages(BoundaryVertices,:)=measuredBoundaryVoltages;
-measureInds = find(~isnan(measuredVoltages));
-flattenedVoltages = measuredVoltages(measureInds);
-% v0(measureInds) == flattenedVoltages;
-
-% constraints
-% for i = 1:nSuccess
-%     rect.gradient' * spdiag(conductances0) * rect.gradient * v0(:,i) == currentInjections(:,i);
-% end
 
 
 
