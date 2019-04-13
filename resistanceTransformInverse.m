@@ -7,7 +7,7 @@ I = 1;
 debugging = 1;
 premade = 1;
 resolution = 20; % 30 per edge
-nMeasurements = 1;
+nMeasurements = 500;
 subdivide = false;
 
 %% load tet mesh
@@ -143,10 +143,10 @@ for i = find(successfulMeasurements==1)'
     counter = counter + 1;
 end
 
-if debugging
-    rvs = rectVerts(BoundaryVertices,:);
+if debugging && false
     % visualize
     for i = 1:nSuccess
+        rvs = rectVerts(BoundaryVertices,:);
         colors = Results{i}.measuredVoltages; colors = colors - min(colors); colors = colors/max(colors);
         removeInds = find(isnan(colors)); colors(removeInds)=[]; rvs(removeInds,:)=[];
         sv = rect.verts(measuredSTInds(i,1),:);
@@ -155,7 +155,6 @@ if debugging
         scatter3(sv(:,1),sv(:,2),sv(:,3),300,'g','filled');
         scatter3(tv(:,1),tv(:,2),tv(:,3),300,'r','filled');
         scatter3(rvs(:,1),rvs(:,2),rvs(:,3),200,[colors colors colors],'.');
-        
     end
 end
 

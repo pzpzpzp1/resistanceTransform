@@ -22,12 +22,9 @@ function measuredVoltages = measureVoltages(data, tetra, Laplacian, sourcePos, s
     %}
 
     % locate source and sink on tet mesh.
-    sourceTet = pointLocation(tetra,sourcePos);
-    sinkTet = pointLocation(tetra,sinkPos);
+    [sourceTet, barycenterSourceCoords ] = pointLocation(tetra,sourcePos);
+    [sinkTet, barycenterSinkCoords] = pointLocation(tetra,sinkPos);
 
-    barycenterSourceCoords = data.vertices(data.tetrahedra(sourceTet,:),:)'\sourcePos';
-    barycenterSinkCoords = data.vertices(data.tetrahedra(sinkTet,:),:)'\sinkPos';
-    
     % check that source/sink points are on the boundary of some tet. 
     assert(numel(find(abs(barycenterSourceCoords)<1e-6))==1);
     assert(numel(find(abs(barycenterSinkCoords)<1e-6))==1);
@@ -46,13 +43,33 @@ function measuredVoltages = measureVoltages(data, tetra, Laplacian, sourcePos, s
     
     injectedCurrent = zeros(data.numVertices,1);
     injectedCurrent(sourceSupport) = injectedCurrent(sourceSupport) + current * sWeights;
-    injectedCurrent(sinkSupport) = injectedCurrent(sinkSupport) + current * tWeights;
+    injectedCurrent(sinkSupport) = injectedCurrent(sinkSupport) - current * tWeights;
     
     % compute voltages on tet vertices.
     inds = 2:numel(injectedCurrent);
-    phi = [(Laplacian(inds,inds) \ injectedCurrent(inds))*resistivity]; % base voltage 0 at first vertex.
-    phi = [0; phi];
+    phiInds = [(Laplacian(inds,inds) \ injectedCurrent(inds))*resistivity]; % base voltage 0 at first vertex.
+    phi = zeros(numel(injectedCurrent),1);
+    phi(inds)=phiInds;
     phi = phi - min(phi);
+    
+    if false
+        % debug laplacian
+%         ind = 2;
+%         [V,D] = eigs(Laplacian,ind,'smallestabs'); V = V - min(V); V = V./max(V);
+%         scatter3(data.vertices(:,1),data.vertices(:,2),data.vertices(:,3),200,[V(:,ind) V(:,ind) V(:,ind)]);
+        
+        % plot results
+        colors = phi; colors = colors - min(colors); colors = colors/max(colors);
+        currentColors = injectedCurrent==0;
+        figure; hold all; rotate3d on;
+%         ptc=patch('Faces',data.triangles(data.isBoundaryTriangle==1,:),'Vertices',data.vertices,'FaceColor','green','EdgeColor','none'); alpha(ptc,.1);
+        scatter3(sourcePos(:,1),sourcePos(:,2),sourcePos(:,3),200,'g','filled');
+        scatter3(sinkPos(:,1),sinkPos(:,2),sinkPos(:,3),200,'r','filled');
+        scatter3(data.vertices(:,1),data.vertices(:,2),data.vertices(:,3),200,[colors colors colors]);
+%         scatter3(data.vertices(:,1),data.vertices(:,2),data.vertices(:,3),200,[currentColors currentColors currentColors]);
+%         patch('Faces',data.triangles(data.tetsToTriangles(sourceTet,:),:),'Vertices',data.vertices,'FaceColor','blue','EdgeColor','black'); alpha(ptc,.1);
+%         patch('Faces',data.triangles(data.tetsToTriangles(sinkTet,:),:),'Vertices',data.vertices,'FaceColor','blue','EdgeColor','black'); alpha(ptc,.1);
+    end
     
     % interpolate voltages linearly to sample at measured locations
     measuredVoltages = SampleScalarFieldFromTetMesh(data, tetra, phi, measureLocations, 0);
