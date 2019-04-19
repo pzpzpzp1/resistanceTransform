@@ -6,9 +6,9 @@ clear all; close all;
 resistivity = 1;
 I = 1;
 debugging = 1;
-resolution = 10; % per edge
+resolution = 13; % per edge
 nMeasurements = 1000;
-samplesizePerIter = 500;
+samplesizePerIter = 2;
 subdivide = false;
 
 %% load random surface mesh
@@ -194,28 +194,13 @@ xlim(BB(:,1)'+[1 -1]*1e-1);ylim(BB(:,2)'+[1 -1]*1e-1);zlim(BB(:,3)'+[1 -1]*1e-1)
 while ~converged
     selectedMeasurements = randsample(nMeasurements,samplesizePerIter,false);
     
-    % construct laplacian and virtual measurement operator
+    
+    % fix conductances, minimize w.r.t. voltages
     vmeasured = solutionVoltagesMat(HMesh.isBoundaryVerts, selectedMeasurements);
     Imeasured = injectedCurrentFull(:,selectedMeasurements);
     Lap = HMesh.gradientOp'*diag(sparse(conductances0))*HMesh.gradientOp;
-    VM = sparse(1:sum(HMesh.isBoundaryVerts),find(HMesh.isBoundaryVerts),ones(sum(HMesh.isBoundaryVerts),1),sum(HMesh.isBoundaryVerts),numel(HMesh.isBoundaryVerts)); 
+    VM = sparse(1:sum(HMesh.isBoundaryVerts),find(HMesh.isBoundaryVerts),ones(sum(HMesh.isBoundaryVerts),1),sum(HMesh.isBoundaryVerts),numel(HMesh.isBoundaryVerts)); %virtual measurement operator
     v = (Lap'*Lap + alphac * VM'*VM)\(Imeasured' * Lap + alphac * vmeasured'*VM)';
-    
-    % fix conductances, minimize relative to voltages
-    %{
-    cvx_begin
-        cvx_solver mosek
-        variable v(HMesh.nverts,samplesizePerIter);
-        
-        % compute physical feasibility energy
-        physFeas = norm(HMesh.gradientOp'*diag(sparse(conductances0))*HMesh.gradientOp ...
-                *v - injectedCurrentFull(:,selectedMeasurements));
-        
-        % compute proximity to measured values
-        prox2Empirical = norm(v(HMesh.isBoundaryVerts,:) - solutionVoltagesMat(HMesh.isBoundaryVerts, selectedMeasurements));
-        minimize pow_pos(prox2Empirical,2) + alphac*pow_pos(physFeas,2);
-    cvx_end
-    %}
     
     % fix voltages, minimize relative to conductances
     cvx_begin
@@ -223,7 +208,6 @@ while ~converged
         variable conductances0(HMesh.nedges,1);
         
         % regularize conductance?
-        
         
         % compute physical feasibility energy
         physFeas = norm(HMesh.gradientOp'*diag(sparse(conductances0))*HMesh.gradientOp ...
