@@ -6,14 +6,15 @@ clear all; close all;
 resistivity = 1;
 I = 1;
 debugging = 1;
-resolution = 13; % per edge
+resolution = 20; % per edge
 nMeasurements = 1000;
-samplesizePerIter = 2;
+samplesizePerIter = 500;
 subdivide = false;
 
 %% load random surface mesh
 files = dir('../../10k_surface/');
 rnum = randi(numel(files)-2)+2;
+rnum=7064;
 filename = files(rnum).name;
 [~,fname,ext] = fileparts(filename);
 
@@ -191,9 +192,13 @@ alphac = 1;
 f1 = figure; hold all; rotate3d on; sctr = scatter3([],[],[]); xlabel('Iterated Conductances');
 ptc2 = patch('Faces',HollowHMesh.F2V(HollowHMesh.isBoundaryFace,:),'Vertices',HollowHMesh.V2P,'FaceColor','green','EdgeColor','none'); alpha(ptc2,.1)
 xlim(BB(:,1)'+[1 -1]*1e-1);ylim(BB(:,2)'+[1 -1]*1e-1);zlim(BB(:,3)'+[1 -1]*1e-1);
+pause;
+counter = 1;
 while ~converged
+    fprintf('Iteration %d\n',counter);
     selectedMeasurements = randsample(nMeasurements,samplesizePerIter,false);
     
+    %% alternate minimizing |Lv-I|^2 + alpha*|v_m-v_e|^2
     
     % fix conductances, minimize w.r.t. voltages
     vmeasured = solutionVoltagesMat(HMesh.isBoundaryVerts, selectedMeasurements);
@@ -226,7 +231,7 @@ while ~converged
         delete(sctr);
         sctr = scatter3(HMesh.edgeCenters(:,1),HMesh.edgeCenters(:,2),HMesh.edgeCenters(:,3),5,conductances0);
     end
-    
+    counter = counter + 1;    
 end
 
 
