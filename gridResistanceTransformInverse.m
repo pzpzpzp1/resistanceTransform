@@ -5,7 +5,7 @@ clear all; close all;
 %% declare misc parameters
 resistivity = 1;
 I = 1;
-debugging = 1;
+debugging = 0;
 resolution = 20; % per edge
 nMeasurements = 1000;
 samplesizePerIter = 500;
@@ -199,6 +199,7 @@ while ~converged
     selectedMeasurements = randsample(nMeasurements,samplesizePerIter,false);
     
     %% alternate minimizing |Lv-I|^2 + alpha*|v_m-v_e|^2
+    t1=tic;
     
     % fix conductances, minimize w.r.t. voltages
     vmeasured = solutionVoltagesMat(HMesh.isBoundaryVerts, selectedMeasurements);
@@ -225,17 +226,20 @@ while ~converged
             sum(conductances0) == vol0;
             conductances0(HMesh.isBoundaryEdge)==ones(sum(HMesh.isBoundaryEdge),1)
     cvx_end
+    telapsed(counter) = toc(t1);
     
     if debugging
         figure(f1); 
         delete(sctr);
         sctr = scatter3(HMesh.edgeCenters(:,1),HMesh.edgeCenters(:,2),HMesh.edgeCenters(:,3),5,conductances0);
     end
+    deviation(counter) = norm(conductances0-conductancesGT);
     counter = counter + 1;    
 end
 
 
-
+% figure; plot(deviation);
+% figure; plot(telapsed);
 
 
 
