@@ -6,7 +6,7 @@ clear all; close all;
 resistivity = 1;
 I = 1;
 debugging = 0;
-resolution = 20; % per edge
+resolution = 25; % per edge
 nMeasurements = 1000;
 samplesizePerIter = 500;
 subdivide = false;
@@ -14,7 +14,8 @@ subdivide = false;
 %% load random surface mesh
 files = dir('../../10k_surface/');
 rnum = randi(numel(files)-2)+2;
-rnum=7064;
+% rnum=7064; % standing ball thing.
+rnum=4235;
 filename = files(rnum).name;
 [~,fname,ext] = fileparts(filename);
 
@@ -186,13 +187,13 @@ vol0 = sum(conductancesGT); % fixed volume
 figure; hold all; rotate3d on; xlabel('GT conductance');
 ptc2 = patch('Faces',HollowHMesh.F2V(HollowHMesh.isBoundaryFace,:),'Vertices',HollowHMesh.V2P,'FaceColor','green','EdgeColor','none'); alpha(ptc2,.1)
 xlim(BB(:,1)'+[1 -1]*1e-1);ylim(BB(:,2)'+[1 -1]*1e-1);zlim(BB(:,3)'+[1 -1]*1e-1);
-scatter3(HMesh.edgeCenters(:,1),HMesh.edgeCenters(:,2),HMesh.edgeCenters(:,3),5,conductancesGT);
+thresh = find(1-conductancesGT > 1e-2);
+scatter3(HMesh.edgeCenters(thresh,1),HMesh.edgeCenters(thresh,2),HMesh.edgeCenters(thresh,3),5,conductancesGT(thresh));
 converged = false;
 alphac = 1;
 f1 = figure; hold all; rotate3d on; sctr = scatter3([],[],[]); xlabel('Iterated Conductances');
 ptc2 = patch('Faces',HollowHMesh.F2V(HollowHMesh.isBoundaryFace,:),'Vertices',HollowHMesh.V2P,'FaceColor','green','EdgeColor','none'); alpha(ptc2,.1)
 xlim(BB(:,1)'+[1 -1]*1e-1);ylim(BB(:,2)'+[1 -1]*1e-1);zlim(BB(:,3)'+[1 -1]*1e-1);
-pause;
 counter = 1;
 while ~converged
     fprintf('Iteration %d\n',counter);
@@ -216,7 +217,7 @@ while ~converged
         % regularize conductance?
         
         % compute physical feasibility energy
-        physFeas = norm(HMesh.gradientOp'*diag(sparse(conductances0))*HMesh.gradientOp ...
+        physFeas = norm(HMesh.gradientOp' * diag(sparse(conductances0)) * HMesh.gradientOp ...
                 *v - injectedCurrentFull(:,selectedMeasurements),'fro');
             
         minimize physFeas;
@@ -227,13 +228,15 @@ while ~converged
             conductances0(HMesh.isBoundaryEdge)==ones(sum(HMesh.isBoundaryEdge),1)
     cvx_end
     telapsed(counter) = toc(t1);
+    conductancesPrev = conductances0;
     
     if debugging
         figure(f1); 
         delete(sctr);
-        sctr = scatter3(HMesh.edgeCenters(:,1),HMesh.edgeCenters(:,2),HMesh.edgeCenters(:,3),5,conductances0);
+        thresh = find(1-conductancesPrev > 1e-2);
+        sctr = scatter3(HMesh.edgeCenters(thresh,1),HMesh.edgeCenters(thresh,2),HMesh.edgeCenters(thresh,3),5,conductancesPrev(thresh));
     end
-    deviation(counter) = norm(conductances0-conductancesGT);
+    deviation(counter) = norm(conductancesPrev-conductancesGT);
     counter = counter + 1;    
 end
 
