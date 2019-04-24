@@ -6,7 +6,7 @@ clear all; close all;
 resistivity = 1;
 I = 1;
 debugging = 0;
-resolution = 25; % per edge
+resolution = 20; % per edge
 nMeasurements = 1000;
 samplesizePerIter = 500;
 subdivide = false;
