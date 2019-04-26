@@ -8,7 +8,7 @@ I = 1;
 debugging = 0;
 resolution = 20; % per edge
 nMeasurements = 1000;
-samplesizePerIter = 500;
+samplesizePerIter = 1000;
 subdivide = false;
 
 %% load random surface mesh
@@ -235,13 +235,23 @@ while ~converged
         delete(sctr);
         thresh = find(1-conductancesPrev > 1e-2);
         sctr = scatter3(HMesh.edgeCenters(thresh,1),HMesh.edgeCenters(thresh,2),HMesh.edgeCenters(thresh,3),5,conductancesPrev(thresh));
+        xlabel(sprintf('Iterated Conductances %d',counter));
     end
     deviation(counter) = norm(conductancesPrev-conductancesGT);
     counter = counter + 1;    
 end
 
+%% threshold based on volume constraint.
+[sortedC, sortedInds] = sort(conductancesPrev);
+keepinds = sortedInds(1:(numel(conductances0)-vol0));
+figure; hold all; rotate3d on; 
+xlim(BB(:,1)'+[1 -1]*1e-1);ylim(BB(:,2)'+[1 -1]*1e-1);zlim(BB(:,3)'+[1 -1]*1e-1);
+scatter3(HMesh.edgeCenters(keepinds,1),HMesh.edgeCenters(keepinds,2),HMesh.edgeCenters(keepinds,3),30,ones(numel(keepinds),1),'green','filled');
+thresholdedConductances = ones(numel(conductances0),1); thresholdedConductances(keepinds)=0; showinds = find((thresholdedConductances-conductancesGT)~=0)
+scatter3(HMesh.edgeCenters(showinds,1),HMesh.edgeCenters(showinds,2),HMesh.edgeCenters(showinds,3),5,thresholdedConductances(showinds)-conductancesGT(showinds));
+title('Diff with GT'); xlabel('Green is the resulting reconstruction. Yellow is the missing parts. Blue are the extra parts.');
 
-% figure; plot(deviation);
+% figure; semilogy(deviation); %ylim([0 max(deviation)]);
 % figure; plot(telapsed);
 
 
