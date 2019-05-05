@@ -6,8 +6,8 @@ clear all; close all;
 resistivity = 1;
 I = 1;
 debugging = 0;
-resolution = 10; % per edge
-nMeasurements = 5;
+resolution = 20; % per edge
+nMeasurements = 500;
 samplesizePerIter = 1000;
 subdivide = false;
 
@@ -200,14 +200,17 @@ rho1 = rand*100;
 rho2 = rand*100;
 
 converged = false;
+counter = 1;
 while ~converged
+    fprintf('Iteration %d\n',counter);
+    
     % dual update
     Z = Z + rho1*norm(D'*sigma*D*phi-J);
     w = w + rho2*(sum(sum(sigma))-v0);
     
     % update phi
     L = D'*sigma*D;
-    S = 2*M'*M + rho1*L'*L;
+    S = 2*(M'*M) + rho1*(L'*L);
     t = (2*phihat'*M + Z'*L - rho1*J'*L)';
     phi = S\t;
     
@@ -223,73 +226,13 @@ while ~converged
     I = speye(size(K));
     A = rho1*K+rho2*I;
     b = (rho1*h' + rho2*v0*ones(size(h')) - g')';
-    sigmavec = lsqlin(A,b,[],[],[],[],0*sigmavec,0*sigmavec+1);
+    C = chol(A); d = C'\b;
+    sigmavec = lsqlin(C,d,[],[],[],[],0*sigmavec,0*sigmavec+1);
     sigma(1:size(sigma,1)+1:end)=sigmavec;
-    
 end
 
 
-
-%% minimize biconvex energy by alternating
-figure; hold all; rotate3d on; xlabel('GT conductance');
-ptc2 = patch('Faces',HollowHMesh.F2V(HollowHMesh.isBoundaryFace,:),'Vertices',HollowHMesh.V2P,'FaceColor','green','EdgeColor','none'); alpha(ptc2,.1)
-xlim(BB(:,1)'+[1 -1]*1e-1);ylim(BB(:,2)'+[1 -1]*1e-1);zlim(BB(:,3)'+[1 -1]*1e-1);
-thresh = find(1-conductancesGT > 1e-2);
-scatter3(HMesh.edgeCenters(thresh,1),HMesh.edgeCenters(thresh,2),HMesh.edgeCenters(thresh,3),5,conductancesGT(thresh));
-converged = false;
-alphac = 1;
-f1 = figure; hold all; rotate3d on; sctr = scatter3([],[],[]); xlabel('Iterated Conductances');
-ptc2 = patch('Faces',HollowHMesh.F2V(HollowHMesh.isBoundaryFace,:),'Vertices',HollowHMesh.V2P,'FaceColor','green','EdgeColor','none'); alpha(ptc2,.1)
-xlim(BB(:,1)'+[1 -1]*1e-1);ylim(BB(:,2)'+[1 -1]*1e-1);zlim(BB(:,3)'+[1 -1]*1e-1);
-counter = 1;
-while ~converged
-    fprintf('Iteration %d\n',counter);
-    selectedMeasurements = randsample(nMeasurements,samplesizePerIter,false);
-    
-    %% alternate minimizing |Lv-I|^2 + alpha*|v_m-v_e|^2
-    t1=tic;
-    
-    % fix conductances, minimize w.r.t. voltages
-    vmeasured = solutionVoltagesMat(HMesh.isBoundaryVerts, selectedMeasurements);
-    Imeasured = injectedCurrentFull(:,selectedMeasurements);
-    Lap = HMesh.gradientOp'*diag(sparse(conductances0))*HMesh.gradientOp;
-    VM = sparse(1:sum(HMesh.isBoundaryVerts),find(HMesh.isBoundaryVerts),ones(sum(HMesh.isBoundaryVerts),1),sum(HMesh.isBoundaryVerts),numel(HMesh.isBoundaryVerts)); %virtual measurement operator
-    v = (Lap'*Lap + alphac * VM'*VM)\(Imeasured' * Lap + alphac * vmeasured'*VM)';
-    
-    % fix voltages, minimize relative to conductances
-    cvx_begin
-        cvx_solver mosek
-        variable conductances0(HMesh.nedges,1);
-        
-        % regularize conductance?
-        
-        % compute physical feasibility energy
-        physFeas = norm(HMesh.gradientOp' * diag(sparse(conductances0)) * HMesh.gradientOp ...
-                *v - injectedCurrentFull(:,selectedMeasurements),'fro');
-            
-        minimize physFeas;
-        subject to
-            conductances0 <= 1;
-            conductances0 >= 0;
-            sum(conductances0) == vol0;
-            conductances0(HMesh.isBoundaryEdge)==ones(sum(HMesh.isBoundaryEdge),1)
-    cvx_end
-    telapsed(counter) = toc(t1);
-    conductancesPrev = conductances0;
-    
-    if debugging
-        figure(f1); 
-        delete(sctr);
-        thresh = find(1-conductancesPrev > 1e-2);
-        sctr = scatter3(HMesh.edgeCenters(thresh,1),HMesh.edgeCenters(thresh,2),HMesh.edgeCenters(thresh,3),5,conductancesPrev(thresh));
-        xlabel(sprintf('Iterated Conductances %d',counter));
-    end
-    deviation(counter) = norm(conductancesPrev-conductancesGT);
-    counter = counter + 1;    
-end
-
-%% threshold based on volume constraint.
-[sortedC, sortedInds] = sort(conductancesPrev);
+[sortedC, sortedInds] = sort(sigmavec);
 keepinds = sortedInds(1:(numel(conductances0)-vol0));
 figure; hold all; rotate3d on; 
 xlim(BB(:,1)'+[1 -1]*1e-1);ylim(BB(:,2)'+[1 -1]*1e-1);zlim(BB(:,3)'+[1 -1]*1e-1);
@@ -298,8 +241,8 @@ thresholdedConductances = ones(numel(conductances0),1); thresholdedConductances(
 scatter3(HMesh.edgeCenters(showinds,1),HMesh.edgeCenters(showinds,2),HMesh.edgeCenters(showinds,3),5,thresholdedConductances(showinds)-conductancesGT(showinds));
 title('Diff with GT'); xlabel('Green is the resulting reconstruction. Yellow is the missing parts. Blue are the extra parts.');
 
-% figure; semilogy(deviation); %ylim([0 max(deviation)]);
-% figure; plot(telapsed);
+
+
 
 
 
