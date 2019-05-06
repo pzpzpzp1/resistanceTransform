@@ -1,14 +1,16 @@
 addpath('point2trimesh');
 addpath('inpolyhedron');
 clear all; close all;
+profile on;
 
 %% declare misc parameters
+verifySubparts = 1;
 resistivity = 1;
 I = 1;
 debugging = 0;
-resolution = 20; % per edge
+resolution = 10; % per edge
 nMeasurements = 500;
-samplesizePerIter = 1000;
+samplesizePerIter = nMeasurements;
 subdivide = false;
 
 %% load random surface mesh
@@ -167,21 +169,8 @@ conductances0 = conductancesGT*0+1;
 conductances0 = conductances0/sum(conductances0)*sum(conductancesGT);
 v0 = sum(conductancesGT); % fixed volume
 
-%% verify that ground truth conductances admits 0 energy solution
-%{
-    cvx_begin
-        cvx_solver mosek
-        variable v(HMesh.nverts,nMeasurements);
-        
-        % compute physical feasibility energy
-        physFeas = norm(HMesh.gradientOp'*diag(sparse(conductancesGT))*HMesh.gradientOp ...
-                *v-injectedCurrentFull);
-        
-        % compute proximity to measured values
-        prox2Empirical = norm(v(bulkMeasuredVoltageIndices)-solutionVoltagesMat(bulkMeasuredVoltageIndices));
-        minimize prox2Empirical + alpha*physFeas;
-    cvx_end
-%}
+
+
 
 %% ADMM section
 % initialize
@@ -192,27 +181,54 @@ D = HMesh.gradientOp;
 phi = volt0;
 phihat = solutionVoltagesMat(boundaryInds, :);
 sigmavec = conductances0;
-sigma = sparse(numel(conductances0),numel(conductances0)); sigma(1:numel(conductances0)+1:end)=sigmavec;
+sigma = sparse(diag(sigmavec));
 J = injectedCurrentFull;
 Z = randn(size(J))*10;
 w = randn*10;
 rho1 = rand*100;
 rho2 = rand*100;
 
+%% verify that ground truth conductances admits 0 energy solution
+sigmaGT = sparse(diag(conductancesGT));
+phiGT = (D'*sigmaGT*D\J);
+E_GT = norm(full(D'*sigmaGT*D*phiGT-J));
+assert(E_GT <= 1e-8);
+
+%% solve ADMM iterations
 converged = false;
 counter = 1;
+energies = [];
+times = [];
 while ~converged
     fprintf('Iteration %d\n',counter);
+    % augmented lagrangian energy
+    energies(counter) = norm(phihat-M*phi,'fro')^2 + trace((D'*sigma*D*phi-J)*Z') + w*(sum(diag(sigma))-v0)...
+        + rho1/2*norm(D'*sigma*D*phi-J,'fro')^2 + rho2/2*(sum(diag(sigma))-v0)^2;
+    tperiter = tic;
     
     % dual update
-    Z = Z + rho1*norm(D'*sigma*D*phi-J);
+    Z = Z + rho1*(D'*sigma*D*phi-J);
     w = w + rho2*(sum(sum(sigma))-v0);
     
     % update phi
     L = D'*sigma*D;
     S = 2*(M'*M) + rho1*(L'*L);
-    t = (2*phihat'*M + Z'*L - rho1*J'*L)';
+    t = (2*phihat'*M - Z'*L + rho1*J'*L)';
     phi = S\t;
+    
+    if verifySubparts && false
+        cvx_begin
+            cvx_precision best;
+            cvx_solver mosek;
+            variable phim(size(phi));
+            z = pow_pos(norm(phihat-M*phim,'fro'),2) + trace((D'*sigma*D*phim-J)*Z') + w*(sum(diag(sigma))-v0)...
+                    + rho1/2*pow_pos(norm(D'*sigma*D*phim-J,'fro'),2) + rho2/2*pow_abs(sum(diag(sigma))-v0,2);
+            minimize z
+        cvx_end
+        z2 = pow_pos(norm(phihat-M*phi,'fro'),2) + trace((D'*sigma*D*phi-J)*Z') + w*(sum(diag(sigma))-v0)...
+        + rho1/2*pow_pos(norm(D'*sigma*D*phi-J,'fro'),2) + rho2/2*pow_abs(sum(diag(sigma))-v0,2);
+        assert(norm(z-z2)<1e-3);
+    end
     
     % update sigma
     Dt = D';
@@ -223,17 +239,102 @@ while ~converged
     K = (Dphi*Dphi').*(Dt'*Dt);
     h = sum((Dt'*J).*Dphi,2);
     g = diag(D*Z*phi'*D') + w;
-    I = speye(size(K));
-    A = rho1*K+rho2*I;
+    A = rho1*K + rho2;
     b = (rho1*h' + rho2*v0*ones(size(h')) - g')';
     C = chol(A); d = C'\b;
     sigmavec = lsqlin(C,d,[],[],[],[],0*sigmavec,0*sigmavec+1);
-    sigma(1:size(sigma,1)+1:end)=sigmavec;
+    sigma = diag(sparse(sigmavec));
+    
+    
+    if verifySubparts && false
+        %{
+        G = full(Dt).*permute(Dphi,[3 1 2]);
+        Efull0 = trace((D'*sigma*D*phi-J)*Z') + w*(sum(diag(sigma))-v0) + rho1/2*norm(D'*sigma*D*phi-J,'fro')^2 + rho2/2*(sum(diag(sigma))-v0)^2;
+        Efull1 = trace((D*Z*phi'*D'+w)*sigma') + rho1/2*norm(D'*sigma*D*phi-J,'fro')^2 + rho2/2*(sum(diag(sigma))-v0)^2 + trace((-J)*Z') + w*(-v0);
+        Efull2 = trace((D*Z*phi'*D'+w)*sigma') + rho1/2*norm(permute(sum(G.*full(diag(sigma))',2),[1 3 2])-J,'fro')^2 + rho2/2*(sum(diag(sigma))-v0)^2;
+        Efull3 = trace((D*Z*phi'*D'+w)*sigma') + rho1/2*norm(permute(sum(G.*full(diag(sigma))',2),[1 3 2])-J,'fro')^2 + rho2/2*(ones(size(sigma,1),1)'*diag(sigma)-v0)^2;
+        Efull4 = rho1/2*norm(permute(sum(G.*full(diag(sigma))',2),[1 3 2])-J,'fro')^2 + rho2/2*(ones(size(sigma,1),1)'*diag(sigma)-v0)^2;
+        Gsigma = permute(sum(G.*full(diag(sigma))',2),[1 3 2]);
+        Efull5 = rho1/2*norm(Gsigma-J,'fro')^2 + rho2/2*(ones(size(sigma,1),1)'*diag(sigma)-v0)^2;
+        E51 = rho1/2*norm(Gsigma-J,'fro')^2;
+        Efull6 = rho1/2*sum(sum(Gsigma.*Gsigma))-rho1*sum(sum(Gsigma.*J))+rho1/2*sum(sum(J.^2)) + rho2/2*(ones(size(sigma,1),1)'*diag(sigma)-v0)^2;
+        Efull7 = rho1/2*sum(sum(Gsigma.*Gsigma))-rho1*sum(sum(Gsigma.*J)) + rho2/2*(ones(size(sigma,1),1)'*diag(sigma)-v0)^2;
+        Efull8 = rho1/2*sum(sum(Gsigma.*Gsigma))-rho1*sum(sum(Gsigma.*J)) + rho2/2*diag(sigma)'*ones(size(sigma,1))*diag(sigma) - rho2*v0*sum(diag(sigma)) + rho2/2*v0^2;
+        Efull9 = rho1/2*sum(sum(Gsigma.*Gsigma)) - rho1*sum(sum(Gsigma.*J)) + rho2/2*diag(sigma)'*ones(size(sigma,1))*diag(sigma) - rho2*v0*sum(diag(sigma));
+        E91 = rho1*h'*sigmavec
+        E92 = rho1*sum(sum(Gsigma.*J))
+        Efull10 = rho1/2*sum(sum(Gsigma.*Gsigma)) - rho1*h'*sigmavec + rho2/2*diag(sigma)'*ones(size(sigma,1))*diag(sigma) - rho2*v0*sum(diag(sigma));
+        E101 = rho1/2*sum(sum(Gsigma.*Gsigma));
+        E102 = rho1/2*sigmavec'*K*sigmavec;
+        Efull11 = rho1/2*sigmavec'*K*sigmavec - rho1*h'*sigmavec + rho2/2*diag(sigma)'*ones(size(sigma,1))*diag(sigma) - rho2*v0*sum(diag(sigma));
+        Efull12 = 1/2*sigmavec'*A*sigmavec - b'*sigmavec;
+        
+        cvx_begin
+            cvx_precision best;
+            cvx_solver mosek;
+            variable sigmam(size(sigma)) diagonal;
+            sigmavecm = diag(sigmam);
+            z = pow_pos(norm(phihat-M*phi,'fro'),2) + trace((D'*sigmam*D*phi-J)*Z') + w*(sum(diag(sigmam))-v0)...
+                    + rho1/2*pow_pos(norm(D'*sigmam*D*phi-J,'fro'),2) + rho2/2*pow_abs(sum(diag(sigmam))-v0,2);
+            minimize z            
+        cvx_end
+        sigmauncon = diag(A\b);
+        z2 = pow_pos(norm(phihat-M*phi,'fro'),2) + trace((D'*sigmauncon*D*phi-J)*Z') + w*(sum(diag(sigmauncon))-v0)...
+            + rho1/2*pow_pos(norm(D'*sigmauncon*D*phi-J,'fro'),2) + rho2/2*pow_abs(sum(diag(sigmauncon))-v0,2);
+        
+        cvx_begin
+            cvx_precision best;
+            cvx_solver mosek;
+            variable xm(size(sigmavec));
+            z3 = pow_pos(norm(C*xm-d,'fro'),2);
+            minimize z3
+            subject to
+                xm >= 0
+                xm <= 1
+                sum(xm) == v0
+                xm(boundaryInds)==1
+        cvx_end
+        
+        cvx_begin
+            cvx_precision best;
+            cvx_solver mosek;
+            variable xm(size(sigmavec));
+            z4 = xm'*A*xm/2 - b'*xm;
+            minimize z4
+            subject to
+                xm >= 0
+                xm <= 1
+                sum(xm) == v0
+                xm(boundaryInds)==1
+        cvx_end
+        %}
+        
+        cvx_begin
+            cvx_precision best;
+            cvx_solver mosek;
+            variable sigmam(size(sigma)) diagonal;
+            sigmavecm = diag(sigmam);
+            z = pow_pos(norm(phihat-M*phi,'fro'),2) + trace((D'*sigmam*D*phi-J)*Z') + w*(sum(diag(sigmam))-v0)...
+                    + rho1/2*pow_pos(norm(D'*sigmam*D*phi-J,'fro'),2) + rho2/2*pow_abs(sum(diag(sigmam))-v0,2);
+            minimize z
+            subject to
+                sigmam >= 0
+                sigmam <= 1
+                sum(diag(sigmam)) == v0
+                sigmavecm(boundaryInds)==1
+        cvx_end
+        z2 = pow_pos(norm(phihat-M*phi,'fro'),2) + trace((D'*sigma*D*phi-J)*Z') + w*(sum(diag(sigma))-v0)...
+        + rho1/2*pow_pos(norm(D'*sigma*D*phi-J,'fro'),2) + rho2/2*pow_abs(sum(diag(sigma))-v0,2);
+        assert(norm((z-z2)/z)<1e-2);
+    end
+    
+    % post opt
+    times(counter) = toc(tperiter);
+    counter = counter + 1;
 end
 
-
 [sortedC, sortedInds] = sort(sigmavec);
-keepinds = sortedInds(1:(numel(conductances0)-vol0));
+keepinds = sortedInds(1:(numel(conductances0)-v0));
 figure; hold all; rotate3d on; 
 xlim(BB(:,1)'+[1 -1]*1e-1);ylim(BB(:,2)'+[1 -1]*1e-1);zlim(BB(:,3)'+[1 -1]*1e-1);
 scatter3(HMesh.edgeCenters(keepinds,1),HMesh.edgeCenters(keepinds,2),HMesh.edgeCenters(keepinds,3),30,ones(numel(keepinds),1),'green','filled');
