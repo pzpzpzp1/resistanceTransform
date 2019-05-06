@@ -338,10 +338,10 @@ keepinds = sortedInds(1:(numel(conductances0)-v0));
 figure; hold all; rotate3d on; 
 xlim(BB(:,1)'+[1 -1]*1e-1);ylim(BB(:,2)'+[1 -1]*1e-1);zlim(BB(:,3)'+[1 -1]*1e-1);
 scatter3(HMesh.edgeCenters(keepinds,1),HMesh.edgeCenters(keepinds,2),HMesh.edgeCenters(keepinds,3),30,ones(numel(keepinds),1),'green','filled');
-thresholdedConductances = ones(numel(conductances0),1); thresholdedConductances(keepinds)=0; showinds = find((thresholdedConductances-conductancesGT)~=0)
+thresholdedConductances = ones(numel(conductances0),1); thresholdedConductances(keepinds)=0; showinds = find((thresholdedConductances-conductancesGT)~=0);
 scatter3(HMesh.edgeCenters(showinds,1),HMesh.edgeCenters(showinds,2),HMesh.edgeCenters(showinds,3),5,thresholdedConductances(showinds)-conductancesGT(showinds));
 title('Diff with GT'); xlabel('Green is the resulting reconstruction. Yellow is the missing parts. Blue are the extra parts.');
-
+ptc2 = patch('Faces',HollowHMesh.F2V(HollowHMesh.isBoundaryFace,:),'Vertices',HollowHMesh.V2P,'FaceColor','green','EdgeColor','black'); alpha(ptc2,.05);
 
 
 
