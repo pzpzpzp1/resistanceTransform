@@ -8,8 +8,8 @@ verifySubparts = 1;
 resistivity = 1;
 I = 1;
 debugging = 0;
-resolution = 20; % per edge
-nMeasurements = 500;
+resolution = 10; % per edge
+nMeasurements = 5;
 samplesizePerIter = nMeasurements;
 subdivide = false;
 
@@ -174,6 +174,8 @@ v0 = sum(conductancesGT); % fixed volume
 
 %% ADMM section
 % initialize
+boundaryEdgeInds = find(HMesh.isBoundaryEdge);
+interiorEdgeInds = find(HMesh.isBoundaryEdge);
 boundaryInds = find(HMesh.isBoundaryVerts);
 interiorInds = find(~HMesh.isBoundaryVerts);
 M = sparse(1:numel(boundaryInds),boundaryInds,boundaryInds*0+1,numel(boundaryInds),HMesh.nverts);
@@ -182,9 +184,11 @@ phi = volt0;
 phihat = solutionVoltagesMat(boundaryInds, :);
 sigmavec = conductances0;
 sigma = sparse(diag(sigmavec));
+sigmaT = sigma;
 J = injectedCurrentFull;
 Z = randn(size(J))*10;
 w = randn*10;
+z = rand(size(sigma,1),1)-.5;
 rho1 = rand*100;
 rho2 = rand*100;
 
@@ -209,12 +213,18 @@ while ~converged
     % dual update
     Z = Z + rho1*(D'*sigma*D*phi-J);
     w = w + rho2*(sum(sum(sigma))-v0);
+    z = z + rho1*diag(sigmaT-sigma);
     
     % update phi
     L = D'*sigma*D;
     S = 2*(M'*M) + rho1*(L'*L);
     t = (2*phihat'*M - Z'*L + rho1*J'*L)';
     phi = S\t;
+    
+    % update sigmaT
+    sigmaT = sigma;
+    sigmaT(sigmaT>1) = 1;
+    sigmaT(sigmaT<0) = 0;
     
     if verifySubparts && false
         cvx_begin
@@ -241,12 +251,15 @@ while ~converged
     g = diag(D*Z*phi'*D') + w;
     A = rho1*K + rho2;
     b = (rho1*h' + rho2*v0*ones(size(h')) - g')';
-    C = chol(A); d = C'\b;
-    sigmavec = lsqlin(C,d,[],[],[],[],0*sigmavec,0*sigmavec+1);
+    Aprime = A + rho1*speye(size(A));
+    bprime = b + z + rho1*diag(sigmaT);
+    knownInds = find(HMesh.isBoundaryEdge);
+    unknownInds = find(~HMesh.isBoundaryEdge);
+    sigmavec(knownInds,:) = 1;
+    sigmavec(unknownInds,:) = Aprime(unknownInds,unknownInds)\(bprime(unknownInds,:) - sum(Aprime(knownInds,unknownInds))');
     sigma = diag(sparse(sigmavec));
     
-    
-    if verifySubparts && false
+    if verifySubparts && true
         %{
         G = full(Dt).*permute(Dphi,[3 1 2]);
         Efull0 = trace((D'*sigma*D*phi-J)*Z') + w*(sum(diag(sigma))-v0) + rho1/2*norm(D'*sigma*D*phi-J,'fro')^2 + rho2/2*(sum(diag(sigma))-v0)^2;
@@ -314,18 +327,20 @@ while ~converged
             cvx_solver mosek;
             variable sigmam(size(sigma)) diagonal;
             sigmavecm = diag(sigmam);
-            z = pow_pos(norm(phihat-M*phi,'fro'),2) + trace((D'*sigmam*D*phi-J)*Z') + w*(sum(diag(sigmam))-v0)...
-                    + rho1/2*pow_pos(norm(D'*sigmam*D*phi-J,'fro'),2) + rho2/2*pow_abs(sum(diag(sigmam))-v0,2);
-            minimize z
+            zobj1 = pow_pos(norm(phihat-M*phi,'fro'),2) + trace((D'*sigmam*D*phi-J)*Z') + w*(sum(diag(sigmam))-v0)...
+                    + rho1/2*pow_pos(norm(D'*sigmam*D*phi-J,'fro'),2) + rho2/2*pow_abs(sum(diag(sigmam))-v0,2);% + rho1/2*pow_pos(norm(sigmavecm-diag(sigmaT)),2) + z'*diag(sigmaT-sigmam);
+            minimize zobj1
             subject to
-                sigmam >= 0
-                sigmam <= 1
-                sum(diag(sigmam)) == v0
-                sigmavecm(boundaryInds)==1
+%                 sigmam >= 0
+%                 sigmam <= 1
+                sigmam == diag(diag(sigmam));
+                %sum(diag(sigmam)) == v0
+                sigmavecm(boundaryEdgeInds)==1
         cvx_end
-        z2 = pow_pos(norm(phihat-M*phi,'fro'),2) + trace((D'*sigma*D*phi-J)*Z') + w*(sum(diag(sigma))-v0)...
-        + rho1/2*pow_pos(norm(D'*sigma*D*phi-J,'fro'),2) + rho2/2*pow_abs(sum(diag(sigma))-v0,2);
-        assert(norm((z-z2)/z)<1e-2);
+        zobj2 = pow_pos(norm(phihat-M*phi,'fro'),2) + trace((D'*sigma*D*phi-J)*Z') + w*(sum(diag(sigma))-v0)...
+        + rho1/2*pow_pos(norm(D'*sigma*D*phi-J,'fro'),2) + rho2/2*pow_abs(sum(diag(sigma))-v0,2) + ...
+        rho1/2*pow_pos(norm(diag(sigma)-diag(sigmaT)),2) + z'*diag(sigmaT-sigma);
+        assert(norm((zobj1-zobj2)/zobj2)<1e-2);
     end
     
     % post opt
