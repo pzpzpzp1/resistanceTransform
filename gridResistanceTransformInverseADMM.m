@@ -6,8 +6,8 @@ clear all; close all;
 resistivity = 1;
 I = 1;
 debugging = 0;
-resolution = 10; % per edge
-nMeasurements = 5;
+resolution = 20; % per edge
+nMeasurements = 500;
 samplesizePerIter = nMeasurements;
 subdivide = false;
 
@@ -213,24 +213,24 @@ while ~converged
     v = (Lap'*Lap + alphac * VM'*VM)\(Imeasured' * Lap + alphac * vmeasured'*VM)';
     
     % fix voltages, minimize relative to conductances
-    cvx_begin
-        cvx_solver mosek
-        variable conductances0(HMesh.nedges,1);
-        
-        % regularize conductance?
-        
-        % compute physical feasibility energy
-        physFeas = norm(HMesh.gradientOp' * diag(sparse(conductances0)) * HMesh.gradientOp ...
-                *v - injectedCurrentFull(:,selectedMeasurements),'fro');
-            
-        minimize physFeas;
-        subject to
-            conductances0 <= 1;
-            conductances0 >= 0;
-            sum(conductances0) == vol0;
-            conductances0(knownInds)==ones(sum(HMesh.isBoundaryEdge),1)
-    cvx_end
-    conductances0ADMM = solveSubpartADMM(HMesh.gradientOp, v, injectedCurrentFull(:,selectedMeasurements),vol0,knownInds,unknownInds);    
+%     cvx_begin
+%         cvx_solver mosek
+%         variable conductances0(HMesh.nedges,1);
+%         
+%         % regularize conductance?
+%         
+%         % compute physical feasibility energy
+%         physFeas = norm(HMesh.gradientOp' * diag(sparse(conductances0)) * HMesh.gradientOp ...
+%                 *v - injectedCurrentFull(:,selectedMeasurements),'fro');
+%             
+%         minimize physFeas;
+%         subject to
+%             conductances0 <= 1;
+%             conductances0 >= 0;
+%             sum(conductances0) == vol0;
+%             conductances0(knownInds)==ones(sum(HMesh.isBoundaryEdge),1)
+%     cvx_end
+    conductances0 = solveSubpartADMM(HMesh.gradientOp, v, injectedCurrentFull(:,selectedMeasurements),vol0,knownInds,unknownInds,conductances0);    
     telapsed(counter) = toc(t1);
     conductancesPrev = conductances0;
     
