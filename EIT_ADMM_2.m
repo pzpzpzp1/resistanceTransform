@@ -8,8 +8,8 @@ verifySubparts = 1;
 resistivity = 1;
 I = 1;
 debugging = 0;
-resolution = 15; % per edge
-nMeasurements = 600;
+resolution = 20; % per edge
+nMeasurements = 500;
 samplesizePerIter = nMeasurements;
 subdivide = false;
 
