@@ -8,8 +8,8 @@ verifySubparts = 1;
 resistivity = 1;
 I = 1;
 debugging = 0;
-resolution = 10; % per edge
-nMeasurements = 5;
+resolution = 20; % per edge
+nMeasurements = 500;
 samplesizePerIter = nMeasurements;
 subdivide = false;
 
@@ -182,9 +182,9 @@ M = sparse(1:numel(boundaryInds),boundaryInds,boundaryInds*0+1,numel(boundaryInd
 D = HMesh.gradientOp;
 phi = volt0;
 phihat = solutionVoltagesMat(boundaryInds, :);
-sigmavec = conductances0;
+sigmavec = conductances0 + rand(size(conductances0));
 sigma = sparse(diag(sigmavec));
-sigmaT = sigma;
+sigmaT = sigma + diag(rand(size(sigma,1),1)*2);
 J = injectedCurrentFull;
 Z = randn(size(J))*10;
 w = randn*10;
@@ -207,7 +207,7 @@ while ~converged
     fprintf('Iteration %d\n',counter);
     % augmented lagrangian energy
     energies(counter) = norm(phihat-M*phi,'fro')^2 + trace((D'*sigma*D*phi-J)*Z') + w*(sum(diag(sigma))-v0)...
-        + rho1/2*norm(D'*sigma*D*phi-J,'fro')^2 + rho2/2*(sum(diag(sigma))-v0)^2;
+        + rho1/2*norm(D'*sigma*D*phi-J,'fro')^2 + rho2/2*(sum(diag(sigma))-v0)^2 + z'*diag(sigmaT-sigma) + rho1/2*norm(diag(sigmaT-sigma))^2;
     tperiter = tic;
     
     % dual update
@@ -222,22 +222,38 @@ while ~converged
     phi = S\t;
     
     % update sigmaT
-    sigmaT = sigma;
+    sigmaT = sigma-diag(z)/rho1;
     sigmaT(sigmaT>1) = 1;
     sigmaT(sigmaT<0) = 0;
     
     if verifySubparts && false
+        % sigmaT
+        cvx_begin
+            cvx_precision best;
+            cvx_solver mosek;
+            variable sigmaTm(size(sigmaT));
+            z1 = z'*diag(sigmaTm-sigma) + rho1/2*pow_pos(norm(diag(sigmaTm-sigma),'fro'),2);
+            minimize z1
+            subject to 
+                diag(sigmaTm) <= 1
+                diag(sigmaTm) >= 0
+                sigmaTm == diag(diag(sigmaTm));
+        cvx_end
+        z2 = z'*diag(sigmaT-sigma) + rho1/2*pow_pos(norm(diag(sigmaT-sigma),'fro'),2);
+        assert(max(max(abs(z1-z2)))<1e-2);
+
+        % phi
         cvx_begin
             cvx_precision best;
             cvx_solver mosek;
             variable phim(size(phi));
-            z = pow_pos(norm(phihat-M*phim,'fro'),2) + trace((D'*sigma*D*phim-J)*Z') + w*(sum(diag(sigma))-v0)...
+            z1 = pow_pos(norm(phihat-M*phim,'fro'),2) + trace((D'*sigma*D*phim-J)*Z') + w*(sum(diag(sigma))-v0)...
                     + rho1/2*pow_pos(norm(D'*sigma*D*phim-J,'fro'),2) + rho2/2*pow_abs(sum(diag(sigma))-v0,2);
-            minimize z
+            minimize z1
         cvx_end
         z2 = pow_pos(norm(phihat-M*phi,'fro'),2) + trace((D'*sigma*D*phi-J)*Z') + w*(sum(diag(sigma))-v0)...
         + rho1/2*pow_pos(norm(D'*sigma*D*phi-J,'fro'),2) + rho2/2*pow_abs(sum(diag(sigma))-v0,2);
-        assert(norm(z-z2)<1e-3);
+        assert(norm(z1-z2)<1e-3);
     end
     
     % update sigma
@@ -253,13 +269,14 @@ while ~converged
     b = (rho1*h' + rho2*v0*ones(size(h')) - g')';
     Aprime = A + rho1*speye(size(A));
     bprime = b + z + rho1*diag(sigmaT);
-    knownInds = find(HMesh.isBoundaryEdge);
-    unknownInds = find(~HMesh.isBoundaryEdge);
-    sigmavec(knownInds,:) = 1;
-    sigmavec(unknownInds,:) = Aprime(unknownInds,unknownInds)\(bprime(unknownInds,:) - sum(Aprime(knownInds,unknownInds))');
+    sigmavec = Aprime\bprime;
+     knownInds = find(HMesh.isBoundaryEdge);
+     unknownInds = find(~HMesh.isBoundaryEdge);
+     sigmavec(knownInds,:) = 1;
+     sigmavec(unknownInds,:) = Aprime(unknownInds,unknownInds)\(bprime(unknownInds,:) - sum(Aprime(knownInds,unknownInds))');
     sigma = diag(sparse(sigmavec));
     
-    if verifySubparts && true
+    if verifySubparts && false
         %{
         G = full(Dt).*permute(Dphi,[3 1 2]);
         Efull0 = trace((D'*sigma*D*phi-J)*Z') + w*(sum(diag(sigma))-v0) + rho1/2*norm(D'*sigma*D*phi-J,'fro')^2 + rho2/2*(sum(diag(sigma))-v0)^2;
@@ -328,13 +345,11 @@ while ~converged
             variable sigmam(size(sigma)) diagonal;
             sigmavecm = diag(sigmam);
             zobj1 = pow_pos(norm(phihat-M*phi,'fro'),2) + trace((D'*sigmam*D*phi-J)*Z') + w*(sum(diag(sigmam))-v0)...
-                    + rho1/2*pow_pos(norm(D'*sigmam*D*phi-J,'fro'),2) + rho2/2*pow_abs(sum(diag(sigmam))-v0,2);% + rho1/2*pow_pos(norm(sigmavecm-diag(sigmaT)),2) + z'*diag(sigmaT-sigmam);
+                    + rho1/2*pow_pos(norm(D'*sigmam*D*phi-J,'fro'),2) + rho2/2*pow_abs(sum(diag(sigmam))-v0,2) + ...
+                    rho1/2*pow_pos(norm(sigmavecm-diag(sigmaT)),2) + z'*diag(sigmaT-sigmam);
             minimize zobj1
             subject to
-%                 sigmam >= 0
-%                 sigmam <= 1
                 sigmam == diag(diag(sigmam));
-                %sum(diag(sigmam)) == v0
                 sigmavecm(boundaryEdgeInds)==1
         cvx_end
         zobj2 = pow_pos(norm(phihat-M*phi,'fro'),2) + trace((D'*sigma*D*phi-J)*Z') + w*(sum(diag(sigma))-v0)...
