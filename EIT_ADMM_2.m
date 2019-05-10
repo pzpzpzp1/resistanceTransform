@@ -8,8 +8,8 @@ verifySubparts = 1;
 resistivity = 1;
 I = 1;
 debugging = 0;
-resolution = 20; % per edge
-nMeasurements = 500;
+resolution = 15; % per edge
+nMeasurements = 600;
 samplesizePerIter = nMeasurements;
 subdivide = false;
 
@@ -269,7 +269,7 @@ while ~converged
     b = (rho1*h' + rho2*v0*ones(size(h')) - g')';
     Aprime = A + rho1*speye(size(A));
     bprime = b + z + rho1*diag(sigmaT);
-    sigmavec = Aprime\bprime;
+    %sigmavec = Aprime\bprime;
      knownInds = find(HMesh.isBoundaryEdge);
      unknownInds = find(~HMesh.isBoundaryEdge);
      sigmavec(knownInds,:) = 1;
@@ -372,8 +372,7 @@ thresholdedConductances = ones(numel(conductances0),1); thresholdedConductances(
 scatter3(HMesh.edgeCenters(showinds,1),HMesh.edgeCenters(showinds,2),HMesh.edgeCenters(showinds,3),5,thresholdedConductances(showinds)-conductancesGT(showinds));
 title('Diff with GT'); xlabel('Green is the resulting reconstruction. Yellow is the missing parts. Blue are the extra parts.');
 ptc2 = patch('Faces',HollowHMesh.F2V(HollowHMesh.isBoundaryFace,:),'Vertices',HollowHMesh.V2P,'FaceColor','green','EdgeColor','black'); alpha(ptc2,.05);
-
-
+%scatter3(HMesh.edgeCenters(knownInds,1),HMesh.edgeCenters(knownInds,2),HMesh.edgeCenters(knownInds,3),5,thresholdedConductances(knownInds)-conductancesGT(knownInds));
 
 
 
