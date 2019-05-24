@@ -22,12 +22,17 @@ function data = getTetDataRT(T,X,lite,force)
     % 123 214 134 324
     tri = [T(:,1) T(:,2) T(:,3) ; T(:,2) T(:,1) T(:,4) ;
            T(:,1) T(:,3) T(:,4) ; T(:,3) T(:,2) T(:,4) ];
+%     opposingV = [T(:,4); T(:,3) ;
+%        T(:,2); T(:,1)];
 
     [~,IA,IC] = unique(sort(tri,2),'rows');
     data.triangles = tri(IA,:);
     data.numTriangles = size(data.triangles,1);
     data.tetsToTriangles = reshape(IC,data.numTetrahedra,4);
 
+%     triangles2opposingV = opposingV(IA);
+%     data.tetsToTrianglesToOpposingV = triangles2opposingV(data.tetsToTriangles);
+    
     counts = accumarray(IC,ones(size(IC)),[data.numTriangles 1]);
     data.isBoundaryTriangle = double(counts == 1);
     bt = data.triangles(find(data.isBoundaryTriangle),:);

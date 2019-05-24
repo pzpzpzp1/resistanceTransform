@@ -5,21 +5,23 @@ clear all; close all;
 %% declare misc parameters
 resistivity = 1;
 I = 1;
-debugging = 0;
+debugging = 1;
 resolution = 20; % per edge
 nMeasurements = 500;
 samplesizePerIter = nMeasurements;
 subdivide = false;
 
 %% load random surface mesh
-files = dir('../../10k_surface/');
-rnum = randi(numel(files)-2)+2;
+files = dir('../../10k_surface/*.obj');
+files = dir('../../10k_surface/40636*');
+rnum = randi(numel(files));
 % rnum=7064; % standing ball thing.
-rnum=4235;
+% rnum=4235;
 filename = files(rnum).name;
 [~,fname,ext] = fileparts(filename);
 
 [V,F]=readOBJ(['../../10k_surface/' filename]);
+% [V,F]=readOBJ(['C:\Users\pzpzp\Documents\MATLAB\SHFramesInVolume\MESHESTOTEST\OBJ\cup.obj']); fname = 'cup';
 
 %% build bounding box
 margin = 1.2;
@@ -73,9 +75,9 @@ if debugging
     
     subplot(1,2,2); hold all; axis equal; rotate3d on; xlabel('voxel representation');
     ptc2 = patch('Faces',HollowHMesh.F2V(HollowHMesh.isBoundaryFace,:),'Vertices',HollowHMesh.V2P,'FaceColor','green','EdgeColor','black');
-    xlim(BB(:,1)'+[1 -1]*1e-1);
-    ylim(BB(:,2)'+[1 -1]*1e-1);
-    zlim(BB(:,3)'+[1 -1]*1e-1);
+    xlim(BB(:,1)'+[1 -1]*1e-2);
+    ylim(BB(:,2)'+[1 -1]*1e-2);
+    zlim(BB(:,3)'+[1 -1]*1e-2);
     alpha(ptc2,.9)
 end
 
@@ -165,6 +167,7 @@ electricLaplacianGT = HMesh.gradientOp'*diag(sparse(conductances))*HMesh.gradien
 v0 = zeros(HMesh.nverts,nMeasurements);
 conductances0 = conductancesGT*0+1;
 conductances0 = conductances0/sum(conductances0)*sum(conductancesGT);
+qnext = rand(size(HMesh.gradientOp,1)+1,1)-.5;
 vol0 = sum(conductancesGT); % fixed volume
 
 %% verify that ground truth conductances admits 0 energy solution
@@ -230,7 +233,7 @@ while ~converged
 %             sum(conductances0) == vol0;
 %             conductances0(knownInds)==ones(sum(HMesh.isBoundaryEdge),1)
 %     cvx_end
-    conductances0 = solveSubpartADMM(HMesh.gradientOp, v, injectedCurrentFull(:,selectedMeasurements),vol0,knownInds,unknownInds,conductances0);    
+    [conductances0, ~, qnext] = solveSubpartADMM(HMesh.gradientOp, v, injectedCurrentFull(:,selectedMeasurements),vol0,knownInds,unknownInds,conductances0,qnext);    
     telapsed(counter) = toc(t1);
     conductancesPrev = conductances0;
     

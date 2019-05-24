@@ -1,4 +1,4 @@
-function [svec, rho] = solveSubpartADMM(D, phi, J, v0,knownInds,unknownInds, startConductances)
+function [svec, rho, q] = solveSubpartADMM(D, phi, J, v0,knownInds,unknownInds, startConductances, startq)
 
 if nargin == 0
     nverts = randi(50)+10;
@@ -13,8 +13,10 @@ if nargin == 0
     J = D'*diag(condGT)*D*phi + 10*rand(size(phi));
     
     [svecMosek, E] = solveByCVX(D, phi, J, v0,knownInds,unknownInds);
-    verify = 0;
+    verifySub = 0;
+    verify = 1;
 else
+    verifySub = 0;
     verify = 0;
 end
 Dphi = D*phi;
@@ -23,7 +25,11 @@ nV = size(Dt,2);
 A = [ones(1,nV); speye(nV)];
 B = [zeros(1,nV); -speye(nV)];
 c = [v0; zeros(nV,1)];
-q = rand(1+nV, 1);
+if exist('startq','var')
+    q = startq;
+else
+    q = rand(1+nV, 1);
+end
 if exist('startConductances','var')
     svec = startConductances;
 else
@@ -34,8 +40,8 @@ s2vecpre = s2vec;
 rho = 132.531;
 rhomin = .001;
 rhomax = 1e4;
-e_abs = 1e-6;
-e_rel = 1e-6;
+e_abs = 1e-1;
+e_rel = 1e-1;
 tau_incr = 2;
 tau_decr = 2;
 mu = 10;
@@ -61,7 +67,7 @@ while ~converged
     clear x; x(pm,:) = Lm'\(Dm\(Lm\(bprime2(pm,:))));
     svec(unknownInds,:) = x; % Aprime2\bprime2
    
-    if verify
+    if verifySub 
         cvx_begin
             cvx_solver mosek
             variable conductances(nV,1);
@@ -82,7 +88,7 @@ while ~converged
     s2vec(s2vec>1) = 1;
     s2vec(s2vec<0) = 0;
     
-    if verify
+    if verifySub 
         cvx_begin
             cvx_precision best
             cvx_solver mosek
