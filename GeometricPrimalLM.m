@@ -1,4 +1,4 @@
-function [L, M] = GeometricPrimalLM(tetra)
+function [L, M, Lij] = GeometricPrimalLM(tetra)
 
 nv = length(tetra.Points);
 
@@ -41,6 +41,9 @@ Lij = accumarray(edgeStarIdx, Lij);
 A = sparse(E(:, 1), E(:, 2), Lij, nv, nv);
 A = A + A';
 L = diag(sum(A, 1)) - A;
+
+% incidence=sparse([1:size(E,1) 1:size(E,1)],E(:),[E(:,1)*0+1;E(:,1)*0-1], nE, nv);
+% L == incidence'*diag(sparse(Lij))*incidence
 
 %% Compute Mass Matrix
 
