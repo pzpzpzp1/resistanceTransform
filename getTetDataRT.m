@@ -34,7 +34,7 @@ function data = getTetDataRT(T,X,lite,force)
 %     data.tetsToTrianglesToOpposingV = triangles2opposingV(data.tetsToTriangles);
     
     counts = accumarray(IC,ones(size(IC)),[data.numTriangles 1]);
-    data.isBoundaryTriangle = double(counts == 1);
+    data.isBoundaryTriangle = counts == 1;
     bt = data.triangles(find(data.isBoundaryTriangle),:);
     data.isBoundaryVertex = zeros(1,data.numVertices); data.isBoundaryVertex(unique(sort(bt(:))))=1;
     data.boundaryTriangles = find(data.isBoundaryTriangle);
