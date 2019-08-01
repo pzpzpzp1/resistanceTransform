@@ -36,7 +36,7 @@ function data = getTetDataRT(T,X,lite,force)
     counts = accumarray(IC,ones(size(IC)),[data.numTriangles 1]);
     data.isBoundaryTriangle = counts == 1;
     bt = data.triangles(find(data.isBoundaryTriangle),:);
-    data.isBoundaryVertex = zeros(1,data.numVertices); data.isBoundaryVertex(unique(sort(bt(:))))=1;
+    data.isBoundaryVertex = zeros(1,data.numVertices)==1; data.isBoundaryVertex(unique(sort(bt(:))))=true;
     data.boundaryTriangles = find(data.isBoundaryTriangle);
 
     tt = data.triangles;
@@ -454,5 +454,11 @@ function data = getTetDataRT(T,X,lite,force)
     
     data.isCreasedBoundaryEdge = isCreasedBE;
 %     data.boundaryEdges = BE;
+
+    BTri2Verts = sparse(data.triangles(data.isBoundaryTriangle==1,:),repmat(1:sum(data.isBoundaryTriangle),1,3),ones(3*sum(data.isBoundaryTriangle),1),data.numVertices,sum(data.isBoundaryTriangle));
+    BtriNormals = data.triangleNormals(data.isBoundaryTriangle==1,:);
+    [jj,ii]=find(BTri2Verts(data.isBoundaryVertex,:));
+    [~,ic]=unique(jj);
+    data.vertNorms = BtriNormals(ii(ic),:);
     
 end
