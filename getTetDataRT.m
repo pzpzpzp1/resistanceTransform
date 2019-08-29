@@ -27,6 +27,10 @@ function data = getTetDataRT(T,X,lite,force)
 
     [~,IA,IC] = unique(sort(tri,2),'rows');
     data.triangles = tri(IA,:);
+    
+    triind = [(1:data.numTetrahedra)';(1:data.numTetrahedra)';(1:data.numTetrahedra)';(1:data.numTetrahedra)'];
+%     data.triangles2tets = triind(IA);
+    
     data.numTriangles = size(data.triangles,1);
     data.tetsToTriangles = reshape(IC,data.numTetrahedra,4);
 
@@ -52,7 +56,7 @@ function data = getTetDataRT(T,X,lite,force)
     E1 = X(T(:,2),:) - X(T(:,1),:);
     E2 = X(T(:,3),:) - X(T(:,1),:);
     E3 = X(T(:,4),:) - X(T(:,1),:);
-    data.tetVolumes = abs(sum(cross(E1,E2).*E3,2)/6);
+    data.tetVolumes = abs(dot(cross(E1,E2),E3,2)/6);
 
     %%
     % E is pairs of vertices for each triangle
@@ -90,8 +94,57 @@ function data = getTetDataRT(T,X,lite,force)
         data.isBoundaryEdge(data.trianglesToEdges(data.boundaryTriangles,i)) = 1;
     end
     data.boundaryEdges = find(data.isBoundaryEdge);
-    adj = sparse(repmat((1:n)',4,1),data.tetsToTriangles(:),ones(4*n,1));
-
+    adj = sparse(repmat((1:n)',4,1),data.tetsToTriangles(:),ones(4*n,1)); % tets x tris
+    adj_trilabeled = sparse(repmat((1:n)',4,1),data.tetsToTriangles(:),data.tetsToTriangles(:)); % tets x tris
+    adj_tetlabeled = sparse(repmat((1:n)',4,1),data.tetsToTriangles(:),repmat([1:data.numTetrahedra]',4,1)); % tets x tris
+    
+    % compute tri x tri 2 tet
+    trixtri2tet = (adj'*adj_tetlabeled);
+    trixtri2tet(1:data.numTriangles+1:end)=0;
+    data.trixtri2tet = trixtri2tet;
+    %{
+    for i=1:100000
+        rtet = randsample(data.numTetrahedra,1);
+        rtris = randsample(data.tetsToTriangles(rtet,:),2);
+        assert(trixtri2tet(rtris(1),rtris(2))==rtet);
+    end
+    %}
+    
+    % compute triangles to tets. one tet will be 0 for boundary triangles
+    bind = sum(adj);
+    [bind1,perm]=sort(bind);
+    adjp = adj(:,perm);
+    boundarypart = adjp(:,1:(find(bind1==2,1)-1));
+    intpart = adjp(:,find(bind1==2,1):end);
+    [first_boundaryTri2Tet, ~]=find(boundarypart); 
+    first_boundaryTri2Tet_padded = [first_boundaryTri2Tet zeros(numel(first_boundaryTri2Tet),1)];
+    [ii,~] = find(intpart); first_intTri2Tet = reshape(ii,2,[])';
+    first_tri2tet = [first_boundaryTri2Tet_padded; first_intTri2Tet];
+    triangles2tets = first_tri2tet*0; 
+    triangles2tets(perm,:) = first_tri2tet;
+    data.triangles2tets = triangles2tets; % [tet1 0;...] for boundary tris. [tet1 tet2] for interior tris.
+    
+    tetxtet_trilabeled = adj_trilabeled*adj';
+    tetxtet_trilabeled(1:data.numTetrahedra+1:end)=0;
+    [ii,jj,kk]=find(tetxtet_trilabeled);
+    data.tetXtri2tet = sparse(ii,kk,jj,data.numTetrahedra,data.numTriangles);
+    data.tetXtri2tet(:,data.isBoundaryTriangle)=0;
+    
+    % verify data.tetXtri2tet is right.
+    %{
+    for i=1:100000
+        rtet = randsample(data.numTetrahedra,1);
+        rtri = randsample(data.tetsToTriangles(rtet,:),1);
+        otet = data.tetXtri2tet(rtet,rtri);
+        if data.isBoundaryTriangle(rtri)
+            assert(data.tetXtri2tet(rtet,rtri)==0);
+        else
+            assert(data.tetXtri2tet(rtet,rtri)~=0);
+            assert(rtri==intersect(data.tetsToTriangles(otet,:), data.tetsToTriangles(rtet,:)));
+        end
+    end
+    %}
+    
     % get trianglesToTets
     if(~lite)
         numberedAdj = adj.*[1:size(adj,1)]';
@@ -460,5 +513,7 @@ function data = getTetDataRT(T,X,lite,force)
     [jj,ii]=find(BTri2Verts(data.isBoundaryVertex,:));
     [~,ic]=unique(jj);
     data.vertNorms = BtriNormals(ii(ic),:);
+    
+    data.edgeLengths = vecnorm(data.vertices(data.edges(:,1),:)-data.vertices(data.edges(:,2),:),2,2);
     
 end
