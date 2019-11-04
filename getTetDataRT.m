@@ -516,4 +516,16 @@ function data = getTetDataRT(T,X,lite,force)
     
     data.edgeLengths = vecnorm(data.vertices(data.edges(:,1),:)-data.vertices(data.edges(:,2),:),2,2);
     
+    %% compute sparse linear matrix that computes transition from linear vertex based function to constant tet based function.
+    p1234 = permute(reshape([data.vertices(data.tetrahedra(:,1),:)'; ones(1,data.numTetrahedra);...
+    data.vertices(data.tetrahedra(:,2),:)'; ones(1,data.numTetrahedra);...
+    data.vertices(data.tetrahedra(:,3),:)'; ones(1,data.numTetrahedra);...
+    data.vertices(data.tetrahedra(:,4),:)'; ones(1,data.numTetrahedra)],4,4,[]),[2 1 3]);
+    linearVertsToConstantTets = multinv(p1234);
+    linearVertsToConstantTetsGradOnly = linearVertsToConstantTets(1:3,:,:);
+    II = permute(reshape(repmat([1:3*data.numTetrahedra]',1,4),3,[],4),[1 3 2]);
+    JJ = repelem(data.tetrahedra,1,3)';
+    linearVertsToConstantTetsOp = sparse(II(:),JJ(:),linearVertsToConstantTetsGradOnly(:),3*data.numTetrahedra, data.numVertices);
+    data.linearVertsToConstantTetsOp = linearVertsToConstantTetsOp;
+    
 end
