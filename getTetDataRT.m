@@ -1,4 +1,8 @@
-function data = getTetDataRT(T,X,lite,force)
+function data = getTetDataRT(T,X,lite,force,anglethresh)
+
+    if ~exist('anglethresh','var') || anglethresh<0
+        anglethresh = 25;
+    end
 
     if(nargin == 2)
         lite = true;
@@ -502,7 +506,7 @@ function data = getTetDataRT(T,X,lite,force)
     BE2BTri = data.edgesToTrianglesIndicator(data.isBoundaryEdge==1,data.isBoundaryTriangle==1);
     [ii jj] = find(BE2BTri); [~, perm ] = sort(ii); jj=jj(perm);
     BE2BTriPair = reshape(jj,2,[])';
-    isCreasedBE = dot(BTriNormals(BE2BTriPair(:,1),:), BTriNormals(BE2BTriPair(:,2),:),2) < .7;
+    isCreasedBE = dot(BTriNormals(BE2BTriPair(:,1),:), BTriNormals(BE2BTriPair(:,2),:),2) < cos(anglethresh*pi/180);
 %     BE = data.edges(data.isBoundaryEdge==1,:);
     
     data.isCreasedBoundaryEdge = isCreasedBE;
