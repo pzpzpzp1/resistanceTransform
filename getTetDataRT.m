@@ -518,6 +518,16 @@ function data = getTetDataRT(T,X,lite,force,anglethresh)
     [~,ic]=unique(jj);
     data.vertNorms = BtriNormals(ii(ic),:);
     
+    areaWeightedBTri2BVerts = BTri2Verts(data.isBoundaryVertex,:).*data.triangleAreas(data.isBoundaryTriangle)';
+    data.areaWeightedVertNorms = areaWeightedBTri2BVerts * BtriNormals;
+    data.areaWeightedVertNorms = data.areaWeightedVertNorms./vecnorm(data.areaWeightedVertNorms,2,2);
+    
+    %{
+    figure; axis equal; hold all; rotate3d on;
+    patch('faces',data.triangles(data.isBoundaryTriangle,:),'vertices',X,'faceColor','green','edgecolor','none')
+    quiver3(X(data.isBoundaryVertex,1),X(data.isBoundaryVertex,2),X(data.isBoundaryVertex,3),data.areaWeightedVertNorms(:,1),data.areaWeightedVertNorms(:,2),data.areaWeightedVertNorms(:,3),'r','linewidth',1)
+    %}
+    
     data.edgeLengths = vecnorm(data.vertices(data.edges(:,1),:)-data.vertices(data.edges(:,2),:),2,2);
     
     %% compute sparse linear matrix that computes transition from linear vertex based function to constant tet based function.
@@ -531,5 +541,20 @@ function data = getTetDataRT(T,X,lite,force,anglethresh)
     JJ = repelem(data.tetrahedra,1,3)';
     linearVertsToConstantTetsOp = sparse(II(:),JJ(:),linearVertsToConstantTetsGradOnly(:),3*data.numTetrahedra, data.numVertices);
     data.linearVertsToConstantTetsOp = linearVertsToConstantTetsOp;
+    
+    %{
+    %% validate linearVertsToConstantTetsOp operator is correct
+    randf = randn(data.numVertices,1)*100;
+    randdf = reshape(data.linearVertsToConstantTetsOp*randf,3,[])';
+    for iii=1:data.numTetrahedra
+        randtet = iii;
+        tvi = data.tetrahedra(randtet,:);
+        tv = data.vertices(tvi,:);
+        fv = randf(tvi);
+        aff_f = [tv ones(4,1)]\fv;
+        gradf = aff_f(1:3);
+        assert(norm(randdf(randtet,:)'-gradf)<.00001)
+    end
+    %}
     
 end
