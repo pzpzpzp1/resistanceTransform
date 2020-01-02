@@ -556,5 +556,6 @@ function data = getTetDataRT(T,X,lite,force,anglethresh)
         assert(norm(randdf(randtet,:)'-gradf)<.00001)
     end
     %}
+    data.vertexWeights = (data.tetVolumes'*data.tetsToVertsIndicator/4)';
     
 end
