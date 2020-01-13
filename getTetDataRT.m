@@ -558,4 +558,21 @@ function data = getTetDataRT(T,X,lite,force,anglethresh)
     %}
     data.vertexWeights = (data.tetVolumes'*data.tetsToVertsIndicator/4)';
     
+    data.tetsToTrianglesIndicator = sparse(data.tetsToTriangles(:),repmat(1:data.numTetrahedra,1,4),ones(4*data.numTetrahedra,1),data.numTriangles,data.numTetrahedra)';
+    
+    % hessian pattern to be given to fmincon if you want to save memory and
+    % have a reasonable objective function.
+    data.PrimalHessPattern1 = data.primalOneLaplacian~=0;
+    data.PrimalHessPattern2 = (data.PrimalHessPattern1*data.PrimalHessPattern1)~=0;
+    data.DualHessPattern1 = (data.tetsToTrianglesIndicator*data.tetsToTrianglesIndicator')~=0;
+    data.DualHessPattern2 = (data.DualHessPattern1*data.DualHessPattern1)~=0;
 end
+
+
+
+
+
+
+
+
+
