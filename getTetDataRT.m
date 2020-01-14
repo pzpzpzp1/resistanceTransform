@@ -595,6 +595,12 @@ function data = getTetDataRT(T,X,lite,force,anglethresh)
     data.PrimalHessPattern2 = (data.PrimalHessPattern1*data.PrimalHessPattern1)~=0;
     data.DualHessPattern1 = (data.tetsToTrianglesIndicator*data.tetsToTrianglesIndicator')~=0;
     data.DualHessPattern2 = (data.DualHessPattern1*data.DualHessPattern1)~=0;
+    
+    data.tet2vertShuffler{1} = sparse(data.tetrahedra(:,1),1:data.numTetrahedra,ones(data.numTetrahedra,1),data.numVertices,data.numTetrahedra);
+    data.tet2vertShuffler{2} = sparse(data.tetrahedra(:,2),1:data.numTetrahedra,ones(data.numTetrahedra,1),data.numVertices,data.numTetrahedra);
+    data.tet2vertShuffler{3} = sparse(data.tetrahedra(:,3),1:data.numTetrahedra,ones(data.numTetrahedra,1),data.numVertices,data.numTetrahedra);
+    data.tet2vertShuffler{4} = sparse(data.tetrahedra(:,4),1:data.numTetrahedra,ones(data.numTetrahedra,1),data.numVertices,data.numTetrahedra);
+    
 end
 
 
