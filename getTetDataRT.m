@@ -542,6 +542,35 @@ function data = getTetDataRT(T,X,lite,force,anglethresh)
     linearVertsToConstantTetsOp = sparse(II(:),JJ(:),linearVertsToConstantTetsGradOnly(:),3*data.numTetrahedra, data.numVertices);
     data.linearVertsToConstantTetsOp = linearVertsToConstantTetsOp;
     
+    data.FEMLaplacian = data.linearVertsToConstantTetsOp'*(repelem(data.tetVolumes,3,1).*data.linearVertsToConstantTetsOp);
+    
+    %% geodesics in heat distance
+    geodesicHeatDt = mean(data.edgeLengths)^2;
+    start = data.isBoundaryVertex';
+    [L, M] = GeometricPrimalLMR(triangulation(data.tetrahedra, data.vertices));
+    kern = (M + geodesicHeatDt*L)\start;
+    data.FEMMassMatrix = M;
+    bulkVec = reshape(data.linearVertsToConstantTetsOp*kern,3,[])';
+    dirs = bulkVec./vecnorm(bulkVec,2,2);
+    dirs4 = reshape(repmat(dirs,1,4)',3,[])';
+    TetsXFaces = reshape(data.tetrahedra(:,[1 2 3, 2 3 4, 3 4 1, 4 1 2])',3,[])';
+    TetsXFacesXOpposingVert = reshape(data.tetrahedra(:,[4, 1, 2, 3])',[],1);
+    v0 = data.vertices(TetsXFacesXOpposingVert,:);
+    v1 = data.vertices(TetsXFaces(:,1),:);
+    v2 = data.vertices(TetsXFaces(:,2),:);
+    v3 = data.vertices(TetsXFaces(:,3),:);
+    TetsXFacesNormals = cross(v1-v2,v2-v3); TetsXFacesNormals = TetsXFacesNormals./vecnorm(TetsXFacesNormals,2,2);
+    TetsXFacesXOrientation = ((dot(v0-v1,TetsXFacesNormals,2)>0)-.5)*2;
+    TetsXFacesAreas = vecnorm(cross(v1-v2,v2-v3),2,2)/2;
+    TetsXVertsXFlux = dot(dirs4, TetsXFacesNormals,2) .* (TetsXFacesAreas/2) .* TetsXFacesXOrientation;
+    tetIndex = reshape(repmat(1:data.numTetrahedra,4,1),[],1);
+    TetsXVertsXFluxMatrix = sparse(tetIndex, reshape(data.tetrahedra',[],1), TetsXVertsXFlux, data.numTetrahedra, data.numVertices);
+    divergence = sum(TetsXVertsXFluxMatrix,1)'; 
+    newPhi = zeros(data.numVertices,1);
+    newPhi(find(~data.isBoundaryVertex)) = L(:,find(~data.isBoundaryVertex))\divergence;
+    newPhi(newPhi<0)=0;
+    data.heatDistanceFromBoundary = newPhi;
+    
     %{
     %% validate linearVertsToConstantTetsOp operator is correct
     randf = randn(data.numVertices,1)*100;

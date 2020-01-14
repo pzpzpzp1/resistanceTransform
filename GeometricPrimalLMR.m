@@ -1,4 +1,4 @@
-function [L, M, Lij] = GeometricPrimalLM(tetra)
+function [L, M, Lij] = GeometricPrimalLMR(tetra)
 
 nv = length(tetra.Points);
 
